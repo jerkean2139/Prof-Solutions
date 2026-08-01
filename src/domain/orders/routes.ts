@@ -12,7 +12,7 @@ const money = z.string().regex(/^\d+(\.\d{1,2})?$/, 'must be a decimal like 135.
 export const orderInputSchema = z.object({
   campaignId: z.string().uuid(),
   buyer: z.object({
-    ghlContactId: z.string().min(1),
+    ghlContactId: z.string().min(1).optional(),
     displayName: z.string().optional(),
     email: z.string().email().optional(),
     phone: z.string().optional(),

@@ -68,12 +68,37 @@ npm run typecheck         # tsc --noEmit
 npm test                  # vitest: migrations, DB guards, snapshot, seed, queue
 ```
 
-## HTTP surface (Phase 0)
+## HTTP surface
 
 - `GET /health` — liveness plus a DB check
 - `GET /me` — returns the auth context (mock identity until Clerk is enforced)
 - `POST /webhooks/accept-blue` — verifies the signature, then records payment refs
-- `POST /webhooks/ghl` — inbound store/contact events (handlers land in Phase 1)
+- `POST /webhooks/ghl` — inbound store/contact events (online orders)
+- Operational JSON API: products, inventory (receive/adjust/on-hand), organizations
+  (with customer base), sales (create/open/finalize), orders, fulfillment
+  (pick list/pick/ship/packing slip), settlement + commissions, reports
+  (margin, leaderboard), vendors + purchase orders, forecasting + reorder.
+
+## The PWA
+
+An installable Progressive Web App is served by the same server at `/app` (no
+separate build or deploy). Open `/app/` in a browser or install it to the home
+screen. It has two views:
+
+- **Order entry** — keyboard-first paper/phone order capture: pick an open sale,
+  type the SKU code and quantity, Enter to add, live running total, save and
+  immediately start the next order.
+- **Team portal** — order history, the team's customer base, the seller
+  leaderboard, and the next-sale countdown.
+
+The PWA calls the same-origin API. While Clerk enforcement is off it uses the
+mock identity; when enforcement flips on it will attach a Clerk session.
+
+## GoHighLevel integration
+
+See `GHL-SETUP.md` for the full from-scratch setup. The outbound worker
+(`npm run worker`) sends tags and custom fields to GHL; without `GHL_API_KEY`
+it logs and skips.
 
 ## Testing notes
 

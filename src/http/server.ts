@@ -1,3 +1,5 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { env } from '../config/env.js';
 import { logger } from '../logger.js';
@@ -33,6 +35,11 @@ export function createServer() {
       },
     }),
   );
+
+  // The installable PWA (order entry + team portal). Served by the same app so
+  // there is no separate frontend build or deploy. The API is same-origin.
+  const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'public');
+  app.use('/app', express.static(publicDir));
 
   app.get('/health', async (_req: Request, res: Response) => {
     try {

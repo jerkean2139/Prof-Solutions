@@ -15,7 +15,10 @@ export interface OrderLineInput {
 export interface CreateOrderInput {
   campaignId: string;
   buyer: {
-    ghlContactId: string;
+    // Online orders carry the GHL contact id. Paper/phone entry has no GHL
+    // contact yet, so it is optional and a provisional local id is assigned;
+    // that customer is flagged for a later GHL push (reconciliation not built).
+    ghlContactId?: string;
     displayName?: string;
     email?: string;
     phone?: string;
@@ -70,6 +73,9 @@ export async function createOrder(input: CreateOrderInput) {
   return withTransaction(async (client) => {
     // Customer upsert. GHL owns identity; we key on ghl_contact_id and keep an
     // operational record that feeds the org list and the master list.
+    // Paper/phone buyers have no GHL identity yet; give them a provisional id
+    // so the customer record exists and can be pushed to GHL later.
+    const ghlContactId = input.buyer.ghlContactId ?? `local-${randomUUID()}`;
     const customer = await client.query<{ id: string }>(
       `INSERT INTO customers (ghl_contact_id, display_name, email, phone, first_order_at, created_by)
        VALUES ($1,$2,$3,$4, now(), $5)
@@ -79,7 +85,7 @@ export async function createOrder(input: CreateOrderInput) {
              phone = COALESCE(EXCLUDED.phone, customers.phone)
        RETURNING id`,
       [
-        input.buyer.ghlContactId,
+        ghlContactId,
         input.buyer.displayName ?? null,
         input.buyer.email ?? null,
         input.buyer.phone ?? null,
