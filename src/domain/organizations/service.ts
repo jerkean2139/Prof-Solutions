@@ -152,3 +152,20 @@ export async function listSellers(organizationId: string) {
   );
   return rows;
 }
+
+// The team's own customer base: every buyer who ordered through this org, with
+// when they first and last bought. This is the org portal's customer view, and
+// it rolls up (through all orgs) into the master Profitable Solutions list.
+export async function listOrgCustomers(organizationId: string) {
+  if (!organizationId) throw badRequest('organizationId is required');
+  const { rows } = await pool.query(
+    `SELECT c.id, c.display_name, c.email, c.phone, c.ghl_contact_id,
+            oc.first_order_at, oc.last_order_at
+       FROM organization_customers oc
+       JOIN customers c ON c.id = oc.customer_id AND c.deleted_at IS NULL
+      WHERE oc.organization_id = $1 AND oc.deleted_at IS NULL
+      ORDER BY oc.last_order_at DESC NULLS LAST`,
+    [organizationId],
+  );
+  return rows;
+}
