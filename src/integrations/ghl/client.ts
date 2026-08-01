@@ -2,15 +2,22 @@ import { env } from '../../config/env.js';
 import { logger } from '../../logger.js';
 import type { GhlJobData, GhlJobName } from '../../queue/ghlQueue.js';
 
-// A thin GoHighLevel API client. It does the actual HTTP work when the queue
-// worker hands it a job. It is never called synchronously from a request path.
+// GoHighLevel v2 API client (services.leadconnectorhq.com). It runs when the
+// queue worker hands it a job; nothing calls it synchronously from a request.
 //
-// The contract requires every call be logged with request, response, and
-// status. That happens here, once, so no caller has to remember to do it.
+// Auth: a Bearer token (OAuth access token or Private Integration token) plus
+// the Version header. Custom field IDs are per-location and come from config,
+// never hardcoded. Endpoints and payloads follow the documented v2 contracts;
+// confirm against the account's marketplace docs and a real token before go-live.
+//
+// The contract requires every call be logged with request, response, and status.
+// That happens here, once.
+
+const GHL_API_VERSION = '2021-07-28';
 
 export interface GhlCallResult {
   ok: boolean;
-  status: number;
+  status: number; // 0 means "not configured, skipped"
   body: unknown;
 }
 
@@ -18,20 +25,17 @@ export class GhlClient {
   constructor(
     private readonly apiBase = env.GHL_API_BASE,
     private readonly apiKey = env.GHL_API_KEY,
+    private readonly customFieldIds: Record<string, string> = env.GHL_CUSTOM_FIELD_IDS,
   ) {}
 
   private configured(): boolean {
     return this.apiKey.length > 0;
   }
 
-  async request(
-    method: string,
-    path: string,
-    body?: unknown,
-  ): Promise<GhlCallResult> {
+  async request(method: string, path: string, body?: unknown): Promise<GhlCallResult> {
     const url = `${this.apiBase}${path}`;
-    // Phase 0: without a key we do not pretend to have called GHL. We log the
-    // intent and return a not-configured result so nothing silently "succeeds".
+    // Without a token we do not pretend to have called GHL. Log the intent and
+    // return a skipped result so nothing silently "succeeds".
     if (!this.configured()) {
       logger.warn({ method, url }, 'ghl not configured; skipping outbound call');
       return { ok: false, status: 0, body: { skipped: 'ghl_not_configured' } };
@@ -43,8 +47,9 @@ export class GhlClient {
         method,
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
+          Version: GHL_API_VERSION,
           'Content-Type': 'application/json',
-          Version: '2021-07-28',
+          Accept: 'application/json',
         },
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -55,10 +60,7 @@ export class GhlClient {
       } catch {
         // leave as text
       }
-      logger.info(
-        { method, url, status: res.status, ms: Date.now() - started },
-        'ghl api call',
-      );
+      logger.info({ method, url, status: res.status, ms: Date.now() - started }, 'ghl api call');
       return { ok: res.ok, status: res.status, body: parsed };
     } catch (err) {
       logger.error(
@@ -69,29 +71,46 @@ export class GhlClient {
     }
   }
 
-  // Maps a queued job to the GHL API surface. Phase 1 fills in the real
-  // endpoints. Phase 0 defines the shape and the logging path.
+  // POST /contacts/{contactId}/tags  body: { tags: [...] }
+  async addTags(contactId: string, tags: string[]): Promise<void> {
+    if (tags.length === 0) return;
+    const res = await this.request('POST', `/contacts/${contactId}/tags`, { tags });
+    if (res.status === 0) return; // not configured
+    if (!res.ok) throw new Error(`ghl addTags failed: ${res.status} ${JSON.stringify(res.body)}`);
+  }
+
+  // PUT /contacts/{contactId}  body: { customFields: [{ id, value }] }
+  // Logical field names are mapped to the account's real field IDs. Unmapped
+  // fields are skipped with a warning, never guessed.
+  async updateContactCustomFields(
+    contactId: string,
+    fields: Record<string, string | number>,
+  ): Promise<void> {
+    const customFields: { id: string; value: string | number }[] = [];
+    for (const [name, value] of Object.entries(fields)) {
+      const id = this.customFieldIds[name];
+      if (!id) {
+        logger.warn({ field: name }, 'no GHL custom field id mapped; skipping field');
+        continue;
+      }
+      customFields.push({ id, value });
+    }
+    if (customFields.length === 0) return;
+    const res = await this.request('PUT', `/contacts/${contactId}`, { customFields });
+    if (res.status === 0) return;
+    if (!res.ok) {
+      throw new Error(`ghl updateContact failed: ${res.status} ${JSON.stringify(res.body)}`);
+    }
+  }
+
+  // Maps a queued job to the GHL API surface. Every job carries the target
+  // contact and, uniformly, the tags to apply and custom fields to write. The
+  // message itself is a GHL workflow that fires off these tags, never sent here.
   async handleJob(name: GhlJobName, data: GhlJobData): Promise<void> {
     logger.info({ name, targetId: data.targetId, tags: data.tags }, 'handling ghl job');
-    switch (name) {
-      case 'sale.finalized':
-      case 'growth.next_sale':
-      case 'store.provision':
-      case 'rep.approved':
-      case 'seller.approved':
-      case 'territory.assigned':
-      case 'shipment.sent':
-      case 'commission.updated':
-        // Real endpoint wiring lands in Phase 1. Placeholder call keeps the
-        // logging and error path exercised end to end.
-        await this.request('POST', `/contacts/${data.targetId}/tags`, {
-          tags: data.tags ?? [],
-        });
-        return;
-      default: {
-        const exhaustive: never = name;
-        throw new Error(`Unhandled GHL job: ${String(exhaustive)}`);
-      }
+    if (data.tags?.length) await this.addTags(data.targetId, data.tags);
+    if (data.customFields && Object.keys(data.customFields).length) {
+      await this.updateContactCustomFields(data.targetId, data.customFields);
     }
   }
 }

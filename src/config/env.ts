@@ -26,6 +26,26 @@ const schema = z.object({
   GHL_API_BASE: z.string().default('https://services.leadconnectorhq.com'),
   GHL_API_KEY: z.string().default(''),
   GHL_LOCATION_ID: z.string().default(''),
+  // Custom field IDs are specific to a GHL location and cannot be guessed. Map
+  // our logical field names to the account's real field IDs, e.g.
+  // {"sale_total_raised":"abc123","tracking_number":"def456"}. Unmapped fields
+  // are skipped (logged), never invented.
+  GHL_CUSTOM_FIELD_IDS: z
+    .string()
+    .default('{}')
+    .transform((s, ctx) => {
+      try {
+        const obj = JSON.parse(s) as Record<string, string>;
+        return obj;
+      } catch {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be valid JSON' });
+        return z.NEVER;
+      }
+    }),
+  // GHL enforces rate limits and they change. Read current limits from their
+  // docs before tuning. Conservative defaults; the worker batches under these.
+  GHL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+  GHL_RATE_LIMIT_DURATION_MS: z.coerce.number().int().positive().default(1000),
 
   ACCEPT_BLUE_WEBHOOK_SECRET: z.string().default(''),
 });

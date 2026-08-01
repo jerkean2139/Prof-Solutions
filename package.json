@@ -18,7 +18,9 @@
     "seed": "tsx src/seed/seed.ts",
     "snapshot:rebuild": "tsx src/inventory/rebuild.ts",
     "dev": "tsx watch src/http/server.ts",
+    "worker": "tsx src/worker.ts",
     "start": "node dist/http/server.js",
+    "start:worker": "node dist/worker.js",
     "test": "vitest run"
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { createRedisConnection } from '../redis/connection.js';
 import { logger } from '../logger.js';
+import { env } from '../config/env.js';
 
 // The integration contract is explicit: every outbound GoHighLevel call goes
 // on a Redis queue with retry and exponential backoff, and a GHL API failure
@@ -92,7 +93,12 @@ export function startGhlWorker(
       );
       await processor(job);
     },
-    { connection: createRedisConnection() },
+    {
+      connection: createRedisConnection(),
+      // Batch under GHL's rate limits: at most MAX jobs per DURATION window.
+      // A bulk sale finalize cannot fire hundreds of calls in a burst.
+      limiter: { max: env.GHL_RATE_LIMIT_MAX, duration: env.GHL_RATE_LIMIT_DURATION_MS },
+    },
   );
 
   worker.on('failed', async (job, err) => {
