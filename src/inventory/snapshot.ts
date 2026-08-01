@@ -78,6 +78,46 @@ export function computeSnapshotRows(
   return result;
 }
 
+// Refresh the snapshot for a single SKU after a ledger write. Uses the same
+// math as the full rebuild (via computeSnapshotRows), so a targeted refresh and
+// a full rebuild always agree. Cheap enough to run inline on every receipt.
+export async function refreshSnapshotForSku(skuId: string): Promise<void> {
+  const onHand = (
+    await pool.query<{ warehouse_id: string; on_hand: string }>(
+      `SELECT warehouse_id, SUM(quantity_delta) AS on_hand
+         FROM inventory_transactions
+        WHERE sku_id = $1
+        GROUP BY warehouse_id`,
+      [skuId],
+    )
+  ).rows.map((r) => ({ sku_id: skuId, warehouse_id: r.warehouse_id, on_hand: Number(r.on_hand) }));
+
+  const demand = (
+    await pool.query<{ committed: string }>(
+      `SELECT COALESCE(SUM(ol.quantity), 0) AS committed
+         FROM order_lines ol
+         JOIN orders o ON o.id = ol.order_id AND o.status = 'open'
+         JOIN campaigns c ON c.id = o.campaign_id
+        WHERE ol.sku_id = $1 AND c.status IN ('finalized', 'picking')`,
+      [skuId],
+    )
+  ).rows.map((r) => ({ sku_id: skuId, committed: Number(r.committed) }));
+
+  const rows = computeSnapshotRows(onHand, demand);
+
+  await withTransaction(async (client) => {
+    await client.query('DELETE FROM inventory_snapshots WHERE sku_id = $1', [skuId]);
+    for (const row of rows) {
+      await client.query(
+        `INSERT INTO inventory_snapshots
+           (sku_id, warehouse_id, quantity_on_hand, quantity_committed, last_computed_at)
+         VALUES ($1, $2, $3, $4, now())`,
+        [row.sku_id, row.warehouse_id, row.quantity_on_hand, row.quantity_committed],
+      );
+    }
+  });
+}
+
 export async function rebuildSnapshots(): Promise<SnapshotRow[]> {
   const onHand = (
     await pool.query<{ sku_id: string; warehouse_id: string; on_hand: string }>(
