@@ -26,13 +26,16 @@ Every buyer becomes a customer. Each team sees its own customer list. All teams'
 ### 6. Inventory: held stock with forecasting
 We hold inventory and forecast reorders from order history. Forecasting reads order and ledger data and never writes inventory. Forecasting UI and reorder are Phase 2.
 
-### 7. Sellers: tracked in Phase 1, paid in Phase 2
+### 7. Reps and sellers are different people
+Reps are people we recruit from the community to represent the product and the fundraising opportunity. They bring teams on board and are the distributor layer that earns the distributor commission. Sellers are the team players and parents who sell product to the end buyer. A rep sources the team, sellers sell inside it. The schema keeps them in separate tables (`reps`, `sellers`) and never merges them.
+
+### 8. Sellers: tracked in Phase 1, paid in Phase 2
 Individual team members are sellers. They share a store link carrying a seller code, and get credit for what they sell. Per-seller commission is a config line added in Phase 2, not a code change. The `seller` payee role exists in `commission_plan_lines` now.
 
-### 8. Auth: Clerk, wired now, enforced later
+### 9. Auth: Clerk, wired now, enforced later
 Clerk governs portal and app login and org membership. `clerk_user_id` and `clerk_org_id` are in the schema now, nullable. Dev and test run on mock data with enforcement off. Enforcement flips on in Phase 2. GHL identity and Clerk identity are separate systems for separate jobs and do not merge.
 
-### 9. The seller and org portal is a PWA
+### 10. The seller and org portal is a PWA
 Installable, works on mobile. The buyer storefront is GHL, not the PWA.
 
 ## Still open, using stated defaults

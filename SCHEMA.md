@@ -113,7 +113,7 @@ Captures what a team agreed to at onboarding so nothing surprises them later.
 | accepted_at | timestamptz | |
 
 ### `sellers` [P1]
-Team members who sell. The feet on the street inside a group.
+The team players and parents who sell product to the end buyer. They belong to one organization. Distinct from reps.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -127,7 +127,7 @@ Team members who sell. The feet on the street inside a group.
 | deleted_at | timestamptz | |
 
 ### `reps` [P1]
-Distributors who source teams. Distinct from sellers, who sell inside one team.
+People we recruit from the community to represent the product and the fundraising opportunity. They bring teams on board and are the distributor layer that earns the distributor commission. Distinct from sellers, who sell inside one team.
 
 | Column | Type | Notes |
 |---|---|---|
