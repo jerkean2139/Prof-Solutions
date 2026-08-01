@@ -12,7 +12,13 @@ import {
   completePickList,
   createShipment,
 } from '../src/domain/fulfillment/service.js';
-import { settleSale, getSettlement } from '../src/domain/settlement/service.js';
+import {
+  settleSale,
+  getSettlement,
+  approveCommission,
+  payCommission,
+  listCommissions,
+} from '../src/domain/settlement/service.js';
 
 let orgId: string;
 let repId: string;
@@ -158,6 +164,26 @@ describe('settlement', () => {
     const view = await getSettlement(saleId);
     const seller = view.commissions.find((c: { payee_type: string }) => c.payee_type === 'seller');
     expect(seller.amount).toBe('9.00');
+  });
+
+  it('moves a commission accrued -> approved -> paid, with guards', async () => {
+    const saleId = await runSaleToDelivered({ quantity: 4, sellerCode: 'NS-JORDAN' });
+    await settleSale(saleId, null);
+    const accrued = await listCommissions({ status: 'accrued' });
+    const mine = accrued.find((c: { campaign_id: string }) => c.campaign_id === saleId);
+    expect(mine).toBeDefined();
+
+    // Cannot pay before approving.
+    await expect(payCommission(mine.id)).rejects.toMatchObject({ status: 409 });
+
+    const approved = await approveCommission(mine.id, null);
+    expect(approved.status).toBe('approved');
+    // Cannot approve twice.
+    await expect(approveCommission(mine.id, null)).rejects.toMatchObject({ status: 409 });
+
+    const paid = await payCommission(mine.id);
+    expect(paid.status).toBe('paid');
+    expect(paid.paid_at).toBeTruthy();
   });
 
   it('refuses to settle a sale that is not delivered, and refuses double settlement', async () => {

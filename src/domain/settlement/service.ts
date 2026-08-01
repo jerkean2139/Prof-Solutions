@@ -176,6 +176,68 @@ export async function settleSale(saleId: string, settledBy: string | null): Prom
   return settlement;
 }
 
+// Payout lifecycle for an accrued commission: accrued -> approved -> paid.
+export async function approveCommission(commissionId: string, approvedBy: string | null) {
+  const cur = await pool.query<{ status: string }>(
+    `SELECT status FROM commission_ledger WHERE id=$1 AND deleted_at IS NULL`,
+    [commissionId],
+  );
+  if (cur.rowCount === 0) throw notFound(`commission ${commissionId} not found`);
+  if (cur.rows[0]!.status !== 'accrued') {
+    throw conflict(`can only approve an accrued commission (is ${cur.rows[0]!.status})`);
+  }
+  const { rows } = await pool.query(
+    `UPDATE commission_ledger SET status='approved', approved_by=$2 WHERE id=$1
+     RETURNING id, payee_type, payee_id, amount, status`,
+    [commissionId, approvedBy],
+  );
+  return rows[0];
+}
+
+export async function payCommission(commissionId: string) {
+  const cur = await pool.query<{ status: string }>(
+    `SELECT status FROM commission_ledger WHERE id=$1 AND deleted_at IS NULL`,
+    [commissionId],
+  );
+  if (cur.rowCount === 0) throw notFound(`commission ${commissionId} not found`);
+  if (cur.rows[0]!.status !== 'approved') {
+    throw conflict(`can only pay an approved commission (is ${cur.rows[0]!.status})`);
+  }
+  const { rows } = await pool.query(
+    `UPDATE commission_ledger SET status='paid', paid_at=now() WHERE id=$1
+     RETURNING id, payee_type, payee_id, amount, status, paid_at`,
+    [commissionId],
+  );
+  return rows[0];
+}
+
+// List commissions for a payout run, filterable by payee and status.
+export async function listCommissions(filter: {
+  payeeType?: string;
+  payeeId?: string;
+  status?: string;
+}) {
+  const conditions = ['deleted_at IS NULL'];
+  const params: unknown[] = [];
+  for (const [col, val] of [
+    ['payee_type', filter.payeeType],
+    ['payee_id', filter.payeeId],
+    ['status', filter.status],
+  ] as const) {
+    if (val) {
+      params.push(val);
+      conditions.push(`${col} = $${params.length}`);
+    }
+  }
+  const { rows } = await pool.query(
+    `SELECT id, payee_type, payee_id, campaign_id, amount, status, approved_by, paid_at
+       FROM commission_ledger WHERE ${conditions.join(' AND ')}
+      ORDER BY created_at DESC`,
+    params,
+  );
+  return rows;
+}
+
 export async function getSettlement(saleId: string) {
   const s = await pool.query(
     `SELECT campaign_id, gross_revenue, organization_payout, distributor_commission,
