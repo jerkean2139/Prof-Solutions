@@ -1,12 +1,21 @@
 # Schema Specification
 
-Postgres. Phase 1 tables are marked **[P1]**. Phase 2 tables are stubbed so the relationships are right from the start, but do not build UI for them.
+Postgres. Phase 1 tables are marked **[P1]**. Phase 0 foundation tables are marked **[P0]**. Phase 2 tables are stubbed so the relationships are right from the start, but do not build UI for them.
 
-## Assumption to confirm
+## The confirmed model
 
-This schema assumes **campaign-based pre-order fundraising**, not stock-and-ship ecommerce. Meaning: a group runs a campaign for a fixed window, collects orders on paper and online, the campaign closes, then product is picked and delivered in bulk to the group who distributes to buyers.
+This schema is **team-based fundraising with held stock and bulk delivery**, GoHighLevel as the front door. A group registers to sell, gets a GHL store, individual buyers order online and on paper, sellers inside the team get credit, the team finalizes the sale in their portal, and the custom stack picks against held inventory and ships one bulk delivery to the team. See `CLAUDE.md` and `BUSINESS-RULES.md`.
 
-That is how detergent fundraising normally works and it drives the entire structure. **If Profitable Solutions actually holds stock and ships individual orders continuously, this schema changes significantly.** Confirm before building.
+This replaces the earlier fixed-window pre-order assumption. Two things changed the schema most: the close is now group-triggered (a team finalizes, no calendar deadline), and individual buyers and sellers are captured and rolled up into org and master client lists.
+
+---
+
+## Identity and auth
+
+Two identity systems, kept separate on purpose. See `INTEGRATION-CONTRACT.md`.
+
+- **GoHighLevel** owns contact identity for reps, sellers, buyers, and org contacts. Linked by `ghl_contact_id`.
+- **Clerk** governs who logs into the portal and app. Linked by `clerk_user_id` and `clerk_org_id`. Columns are added now and left nullable until enforcement flips on.
 
 ---
 
@@ -54,46 +63,76 @@ QR scanning resolves `qr_code` to a SKU. Index it.
 | effective_to | date | null means current |
 | active | boolean | |
 
-Versioned by date so historical campaigns settle at the rate that applied when they ran. Do not overwrite rates.
+Versioned by date so historical sales settle at the rate that applied when they ran. Do not overwrite rates.
 
 ### `commission_plan_lines` [P1 config]
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
 | plan_id | uuid FK | |
-| payee_role | text | `organization` or `distributor` |
+| payee_role | text | `organization`, `distributor`, or `seller` |
 | calc_type | text | `flat_per_unit` or `percent_of_retail` |
 | value | numeric(12,4) | 12.00 flat, or 0.1250 percent |
 | applies_to_product_id | uuid FK nullable | null means all products |
 
-Current reality: organization gets `flat_per_unit` 12.00. Distributor is `percent_of_retail`, value undecided, defaulting to 0.1250.
+Current reality: organization gets `flat_per_unit` 12.00. Distributor is `percent_of_retail`, value undecided, defaulting to 0.1250. `seller` is defined now so per-seller payout is a config row in Phase 2, not a code change. In Phase 1 sellers are credited (attribution), not paid.
 
 ---
 
 ## Organizations and people
 
 ### `organizations` [P1]
-The fundraising groups. Schools, teams, churches, booster clubs.
+The fundraising teams. Schools, teams, churches, booster clubs.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
 | name | text | |
 | org_type | text | school, sports_team, church, other |
-| contact_name | text | |
-| contact_email | text | |
-| contact_phone | text | |
-| ghl_contact_id | text | link to GHL if they exist there |
+| status | text | prospect, onboarding, active, dormant |
+| contact_name | text | cached from GHL |
+| contact_email | text | cached from GHL |
+| contact_phone | text | cached from GHL |
+| ghl_contact_id | text | link to GHL, source of truth for identity |
+| ghl_store_id | text nullable | the provisioned GHL funnel/store |
+| store_slug | text UNIQUE nullable | stable public identifier for the team store |
+| clerk_org_id | text nullable | portal org identity, nullable until enforced |
 | address_* | text | delivery address fields |
 | deleted_at | timestamptz | |
 
-### `reps` [P1]
-Distributors, the feet on the street.
+### `organization_agreements` [P1]
+Captures what a team agreed to at onboarding so nothing surprises them later.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
-| ghl_contact_id | text UNIQUE | **GHL is source of truth for identity** |
+| organization_id | uuid FK | |
+| terms_version | text | which terms they saw |
+| terms_snapshot | text | the exact text shown, frozen |
+| accepted_by | text | name of the person who accepted |
+| accepted_at | timestamptz | |
+
+### `sellers` [P1]
+Team members who sell. The feet on the street inside a group.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| organization_id | uuid FK | |
+| ghl_contact_id | text UNIQUE | GHL is source of truth for identity |
+| display_name | text | cached from GHL |
+| seller_code | text UNIQUE | rides the store link, lands on the order |
+| status | text | applicant, approved, active, paused |
+| clerk_user_id | text nullable | portal login, nullable until enforced |
+| deleted_at | timestamptz | |
+
+### `reps` [P1]
+Distributors who source teams. Distinct from sellers, who sell inside one team.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| ghl_contact_id | text UNIQUE | GHL is source of truth for identity |
 | display_name | text | cached from GHL for reporting speed |
 | status | text | applicant, approved, active, paused, terminated |
 | approved_at | timestamptz | |
@@ -101,7 +140,31 @@ Distributors, the feet on the street.
 | commission_plan_id | uuid FK | |
 | deleted_at | timestamptz | |
 
-Name, email, and phone are cached here for reporting but GHL wins on conflict. See the integration contract.
+### `customers` [P1]
+End buyers. The master Profitable Solutions client list.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| ghl_contact_id | text UNIQUE | GHL owns identity, created at checkout |
+| display_name | text | cached from GHL |
+| email | text nullable | cached |
+| phone | text nullable | cached |
+| first_order_at | timestamptz | |
+| deleted_at | timestamptz | |
+
+### `organization_customers` [P1]
+Rolls a customer up to each team they bought through. The team sees its own list, Profitable Solutions sees the master list of all customers.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| organization_id | uuid FK | |
+| customer_id | uuid FK | |
+| first_order_at | timestamptz | |
+| last_order_at | timestamptz | |
+
+UNIQUE on (organization_id, customer_id). Maintained from orders, not authoritative on its own.
 
 ### `users` [P1]
 Internal staff. Warehouse, admin, owner.
@@ -112,31 +175,38 @@ Internal staff. Warehouse, admin, owner.
 | email | text UNIQUE | |
 | name | text | |
 | role | text | admin, warehouse, sales, readonly |
+| clerk_user_id | text nullable | nullable until enforced |
 | active | boolean | |
 
 ---
 
-## Campaigns
+## Sales
 
 ### `campaigns` [P1]
+A team's fundraising sale. Org-facing word is "sale."
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
 | organization_id | uuid FK | |
 | rep_id | uuid FK nullable | who sourced it |
 | name | text | "Northside HS Fall 2026" |
-| commission_plan_id | uuid FK | locked at campaign creation |
-| starts_on | date | |
-| ends_on | date | order collection deadline |
-| delivery_target_date | date | |
+| channel | text | fundraising, retail |
+| commission_plan_id | uuid FK | locked at sale creation |
+| starts_on | date | store goes live |
+| status | text | draft, open, finalizing, finalized, picking, delivered, settled, cancelled |
+| finalized_at | timestamptz nullable | the group-triggered close |
+| finalized_by | text nullable | who finalized (team or staff) |
 | goal_amount | numeric(12,2) | |
-| status | text | draft, active, closed, picking, delivered, settled, cancelled |
+| next_sale_target | date nullable | growth loop countdown target |
+| incentive_note | text nullable | growth loop offer |
+| delivery_target_date | date nullable | |
 | deleted_at | timestamptz | |
 
-Status drives everything. Orders can only be added when `active`. Pick lists only generate when `closed`.
+Status drives everything. Orders can only be added when `open`. Pick lists only generate when `finalized`. There is no calendar deadline that closes a sale. The team finalizes.
 
 ### `campaign_skus` [P1]
-Which products are offered in this campaign, with optional price override.
+Which products are offered in this sale, with optional price override.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -155,17 +225,16 @@ Which products are offered in this campaign, with optional price override.
 | id | uuid PK | |
 | campaign_id | uuid FK | |
 | order_number | text UNIQUE | human readable |
-| buyer_name | text | |
-| buyer_phone | text nullable | |
-| buyer_email | text nullable | |
-| entry_channel | text | paper, online, phone |
-| entered_by | uuid FK users | |
+| customer_id | uuid FK | the buyer, rolled up to the master list |
+| seller_id | uuid FK nullable | seller credit, null rolls up to the team only |
+| entry_channel | text | online, paper, phone |
+| entered_by | uuid FK users nullable | null when it came from the online store |
 | subtotal | numeric(12,2) | |
 | status | text | open, cancelled, fulfilled |
 | notes | text | |
 | created_at | timestamptz | |
 
-Paper is the primary channel today. The entry screen must support rapid keyboard-only entry of a stack of order forms. This is the single most important UI in Phase 1.
+Buyer identity lives on `customers`, not duplicated here. Online orders arrive from the GHL store. Paper and phone orders are typed by staff and must support rapid keyboard-only entry of a stack of forms.
 
 ### `order_lines` [P1]
 | Column | Type | Notes |
@@ -178,6 +247,23 @@ Paper is the primary channel today. The entry screen must support rapid keyboard
 | extended | numeric(12,2) | generated column |
 
 `unit_price` is a snapshot. If a SKU price changes later, historical orders do not move.
+
+### `payments` [P1]
+ACH captured in the GHL store and processed through Accept Blue. The custom stack stores a reference only. No raw bank data ever.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid PK | |
+| order_id | uuid FK | |
+| method | text | ach |
+| amount | numeric(12,2) | |
+| status | text | pending, authorized, captured, settled, failed, refunded |
+| accept_blue_ref | text nullable | processor transaction id |
+| ghl_transaction_id | text nullable | GHL side reference |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+Never store account or routing numbers. Status updates arrive by webhook and are new writes, never deletes.
 
 ---
 
@@ -228,7 +314,7 @@ Corrections are new offsetting rows with a `reason`. This is what makes the syst
 | sku_id | uuid | |
 | warehouse_id | uuid | |
 | quantity_on_hand | integer | |
-| quantity_committed | integer | allocated to closed campaigns |
+| quantity_committed | integer | allocated to finalized sales |
 | quantity_available | integer | generated: on_hand minus committed |
 | last_computed_at | timestamptz | |
 
@@ -249,7 +335,7 @@ PK is (sku_id, warehouse_id). Rebuilt from the ledger. Cached in Redis for the o
 | generated_at | timestamptz | |
 | completed_at | timestamptz | |
 
-Generated by aggregating all `order_lines` across a closed campaign, grouped by SKU. The group gets one bulk delivery, not individual buyer boxes.
+Generated by aggregating all `order_lines` across a finalized sale, grouped by SKU. The team gets one bulk delivery, not individual buyer boxes.
 
 ### `pick_list_lines` [P1]
 | Column | Type | Notes |
@@ -277,7 +363,7 @@ Completing a pick list line writes a `pick` transaction to the ledger. That is t
 | delivered_at | timestamptz | |
 | delivery_signature | text nullable | |
 
-Packing slip is a rendered document off this record plus its pick list lines. Not a separate table.
+One bulk shipment to the team. Packing slip is a rendered document off this record plus its pick list lines. Not a separate table.
 
 ---
 
@@ -296,11 +382,14 @@ id, po_id, sku_id, quantity_ordered, quantity_received, unit_cost
 
 Receiving against a PO writes `receipt` transactions to the inventory ledger.
 
+### `demand_forecasts` [P2]
+id, sku_id, warehouse_id, period, projected_units, reorder_point, computed_at. Derived from order and ledger history. Read only against inventory, never writes it.
+
 ### `campaign_settlements` [P2]
-id, campaign_id, gross_revenue, organization_payout, distributor_commission, product_cost_total, gross_profit, status, settled_at
+id, campaign_id, gross_revenue, organization_payout, distributor_commission, seller_commission, product_cost_total, gross_profit, status, settled_at
 
 ### `commission_ledger` [P2]
-id, rep_id, campaign_id, amount, status (accrued, approved, paid), approved_by, paid_at
+id, payee_type (rep, seller), payee_id, campaign_id, amount, status (accrued, approved, paid), approved_by, paid_at
 
 ### `territories` [P2]
 id, name, postal_codes (text array), max_active_reps, active
@@ -318,15 +407,20 @@ Saturation rule lives here: count active `rep_territories` against `territories.
 - `inventory_transactions (sku_id, warehouse_id, created_at)` — ledger rebuilds
 - `order_lines (order_id)` and `order_lines (sku_id)`
 - `orders (campaign_id)` — pick list generation
-- `campaigns (status, ends_on)` — the operational dashboard
-- `reps (ghl_contact_id)` — sync lookups
+- `orders (customer_id)` and `orders (seller_id)` — list rollup and seller credit
+- `payments (order_id)` and `payments (status)` — finalizable totals
+- `organization_customers (organization_id)` and `(customer_id)` — list views
+- `campaigns (status, organization_id)` — the operational dashboard
+- `reps (ghl_contact_id)`, `sellers (ghl_contact_id)`, `customers (ghl_contact_id)` — sync lookups
+- `organizations (store_slug)` — store resolution
 
 ## Constraints worth enforcing in the database
 
-- `orders` cannot be inserted unless parent campaign status is `active`
+- `orders` cannot be inserted unless parent sale status is `open`
 - `inventory_transactions.quantity_delta` cannot be zero
 - `inventory_transactions.reason` required when `txn_type = 'adjustment'`
 - `commission_plan_lines.value` must be positive
+- `payments` must never carry a column for account or routing number
 - No UPDATE or DELETE trigger on `inventory_transactions`
 
 Put these in the database, not just the application layer. The application will get rewritten. The data has to survive it.
