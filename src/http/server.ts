@@ -14,6 +14,8 @@ import { createOrder } from '../domain/orders/service.js';
 import { fulfillmentRoutes } from '../domain/fulfillment/routes.js';
 import { settlementRoutes } from '../domain/settlement/routes.js';
 import { reportRoutes } from '../domain/reports/routes.js';
+import { vendorRoutes } from '../domain/vendors/routes.js';
+import { forecastRoutes } from '../domain/forecast/routes.js';
 
 // Phase 0 HTTP surface: a health check, the auth boundary wired but not
 // enforced, and webhook intake stubs. No business endpoints yet. The point is
@@ -99,6 +101,8 @@ export function createServer() {
   app.use(fulfillmentRoutes());
   app.use(settlementRoutes());
   app.use(reportRoutes());
+  app.use(vendorRoutes());
+  app.use(forecastRoutes());
 
   // Central error handler. Maps AppError to its status, respects any error that
   // already carries an HTTP status (e.g. body-parser's 400 on malformed JSON),
