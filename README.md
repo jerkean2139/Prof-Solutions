@@ -94,6 +94,21 @@ screen. It has two views:
 The PWA calls the same-origin API. While Clerk enforcement is off it uses the
 mock identity; when enforcement flips on it will attach a Clerk session.
 
+## Enabling Clerk enforcement
+
+Auth is wired and enforced later (rule 9). The boundary (`requireAuth`) injects a
+mock identity while `AUTH_ENFORCED=false` and requires a valid Clerk bearer token
+when it is `true`. To turn it on:
+
+1. Set `CLERK_SECRET_KEY` (and `CLERK_PUBLISHABLE_KEY` for the frontend).
+2. Provision internal staff in the `users` table with their `clerk_user_id` so
+   `created_by` resolves; organizations carry `clerk_org_id` for portal access.
+3. Set `AUTH_ENFORCED=true` and restart. The app refuses to start with
+   enforcement on and no secret key, so a misconfiguration fails fast.
+
+The enforced path (missing token, invalid token, valid token) is covered by
+tests using an injected verifier, so no real keys are needed to verify the logic.
+
 ## GoHighLevel integration
 
 See `GHL-SETUP.md` for the full from-scratch setup. The outbound worker
