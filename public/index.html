@@ -259,6 +259,7 @@
           </select>
         </label>
         <button id="payReload" class="btn ghost" type="button">Reload</button>
+        <button id="expPayouts" class="btn ghost" type="button">Export CSV</button>
       </div>
       <div id="payList" class="scroll" style="max-height:none">Loading…</div>
     </section>
@@ -275,8 +276,8 @@
         <div class="card"><h3>Sales pipeline</h3><div id="dashPipeline" class="scroll">Loading…</div></div>
         <div class="card"><h3>Reorder alerts</h3><div id="dashReorder" class="scroll">Loading…</div></div>
         <div class="card"><h3>Top sellers</h3><div id="dashSellers" class="scroll">Loading…</div></div>
-        <div class="card"><h3>Inventory on hand</h3><div id="dashInventory" class="scroll">Loading…</div></div>
-        <div class="card"><h3>Master client list</h3><div id="dashCustomers" class="scroll">Loading…</div></div>
+        <div class="card"><div class="card-head"><h3>Inventory on hand</h3><button id="expInventory" class="btn ghost sm" type="button">Export CSV</button></div><div id="dashInventory" class="scroll">Loading…</div></div>
+        <div class="card"><div class="card-head"><h3>Master client list</h3><button id="expCustomers" class="btn ghost sm" type="button">Export CSV</button></div><div id="dashCustomers" class="scroll">Loading…</div></div>
       </div>
     </section>
   </main>

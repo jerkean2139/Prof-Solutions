@@ -88,6 +88,9 @@ input:focus, select:focus { outline: 3px solid #bfe8d5; border-color: var(--bran
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
 .card h3 { margin: 0 0 10px; font-size: 15px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card-head h3 { margin: 0 0 10px; }
+.btn.sm { padding: 6px 10px; min-height: 34px; font-size: 13px; }
 .scroll { max-height: 320px; overflow: auto; font-size: 14px; }
 .scroll table { width: 100%; border-collapse: collapse; }
 .scroll td, .scroll th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }

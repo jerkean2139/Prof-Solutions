@@ -27,6 +27,29 @@ function toast(msg) {
   toast._t = setTimeout(() => (t.hidden = true), 2200);
 }
 
+// CSV export. This business lives in spreadsheets, so every list should be one
+// click away from Excel. Fields are quoted when they contain a comma, quote, or
+// newline, with internal quotes doubled -- the standard CSV escaping.
+function toCsv(headers, rows) {
+  const esc = (v) => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return [headers.map(esc).join(','), ...rows.map((r) => r.map(esc).join(','))].join('\r\n');
+}
+
+function downloadCsv(filename, headers, rows) {
+  const blob = new Blob([toCsv(headers, rows)], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ---- tabs ----
 document.querySelectorAll('.tab').forEach((tab) => {
   tab.addEventListener('click', () => {
@@ -720,6 +743,8 @@ function usd(str) {
   return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const dashData = { inventory: [], customers: [] };
+
 async function loadDashboard() {
   try {
     const [d, inventory, customers] = await Promise.all([
@@ -727,6 +752,8 @@ async function loadDashboard() {
       api('/inventory'),
       api('/customers'),
     ]);
+    dashData.inventory = inventory;
+    dashData.customers = customers;
     const h = d.headline;
     $('dashStats').innerHTML = [
       stat(usd(h.revenue), 'Revenue'),
@@ -785,17 +812,25 @@ function stat(val, lbl, warn) {
 }
 
 $('dashReload').addEventListener('click', () => loadDashboard());
+$('expInventory').addEventListener('click', () =>
+  downloadCsv('inventory.csv', ['SKU', 'On hand', 'Committed', 'Available'],
+    dashData.inventory.map((i) => [i.sku_code, i.on_hand, i.committed, i.available])));
+$('expCustomers').addEventListener('click', () =>
+  downloadCsv('master-client-list.csv', ['Client', 'Email', 'Phone', 'Teams', 'First order', 'Last order'],
+    dashData.customers.map((c) => [c.display_name || '', c.email || '', c.phone || '', c.teams, fmtDate(c.first_order_at), fmtDate(c.last_order_at)])));
 
 // ---- payouts ----
 // The commission payout run: accrued -> approved -> paid. Each row shows the
 // one action available for its state, so the lifecycle is enforced by the UI as
 // well as the API.
+let payoutRows = [];
 async function loadPayouts() {
   const area = $('payList');
   const status = $('payStatus').value;
   area.innerHTML = 'Loading…';
   try {
     const rows = await api('/commissions' + (status ? `?status=${status}` : ''));
+    payoutRows = rows;
     if (!rows.length) { area.textContent = 'No commissions for this filter.'; return; }
     const head = '<tr><th>Payee</th><th>Type</th><th>Sale</th><th class="num">Amount</th><th>Status</th><th></th></tr>';
     const body = rows.map((c) => {
@@ -833,6 +868,9 @@ async function payAction(id, action) {
 
 $('payStatus').addEventListener('change', () => loadPayouts());
 $('payReload').addEventListener('click', () => loadPayouts());
+$('expPayouts').addEventListener('click', () =>
+  downloadCsv('payouts.csv', ['Payee', 'Type', 'Sale', 'Amount', 'Status'],
+    payoutRows.map((c) => [c.payee_name || '', c.payee_type, c.campaign_name || '', c.amount, c.status])));
 
 // ---- sales admin ----
 // The front of the operational funnel: create a sale for a team, choose the
