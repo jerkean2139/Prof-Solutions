@@ -13,6 +13,7 @@ Start with the docs, in this order:
 - `INTEGRATION-CONTRACT.md` — who owns which field, and the sync rules
 - `SCHEMA.md` — the data model
 - `BUILD-PLAN.md` — phases and what "done" means for each
+- `RUNBOOK.md` — how to run, deploy, smoke-test, and turn on the key-gated pieces
 
 ## Stack
 
