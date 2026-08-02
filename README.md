@@ -107,6 +107,8 @@ screen. Its views:
   sellers.
 - **Catalog** — set up the products and SKUs (with QR codes) the receiving
   screen scans against. A SKU added here is immediately scannable in Receiving.
+  "Print QR labels" generates a print-ready sheet of scannable QR labels, one
+  per SKU, encoded locally with no external service.
 - **Purchasing** — add vendors, raise purchase orders, and receive stock against
   them. Receiving a PO writes to the same append-only ledger as the receiving
   screen, closing the loop from forecast to reorder to PO to on-hand.

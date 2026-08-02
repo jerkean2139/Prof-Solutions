@@ -250,7 +250,10 @@
 
       <div class="cards">
         <div class="card"><h3>Products</h3><div id="catProducts" class="scroll">Loading…</div></div>
-        <div class="card"><h3>SKUs</h3><div id="catSkus" class="scroll">Loading…</div></div>
+        <div class="card">
+          <div class="card-head"><h3>SKUs</h3><button id="printLabels" class="btn ghost sm" type="button">Print QR labels</button></div>
+          <div id="catSkus" class="scroll">Loading…</div>
+        </div>
       </div>
     </section>
 
@@ -338,6 +341,7 @@
     </section>
   </main>
 
+  <script src="/app/qr.js"></script>
   <script src="/app/app.js"></script>
 </body>
 </html>
