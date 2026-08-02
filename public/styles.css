@@ -29,11 +29,13 @@ body {
   display: flex; flex-direction: column; gap: 8px;
 }
 .brand { font-weight: 700; font-size: 18px; padding-top: 12px; }
-.tabs { display: flex; gap: 4px; }
+/* Horizontally scrollable so every tab is reachable on a narrow phone. */
+.tabs { display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
 .tab {
   appearance: none; border: 0; background: transparent; color: #d8f3e6;
   padding: 10px 14px; font-size: 15px; font-weight: 600; cursor: pointer;
-  border-bottom: 3px solid transparent;
+  border-bottom: 3px solid transparent; white-space: nowrap; flex: 0 0 auto;
 }
 .tab.is-active { color: #fff; border-bottom-color: #fff; }
 
@@ -115,6 +117,8 @@ input:focus, select:focus { outline: 3px solid #bfe8d5; border-color: var(--bran
 .ff-badge.short { background: #fdecea; color: var(--danger); }
 .ff-badge.ok { background: #e7f6ee; color: var(--brand); }
 .ff-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.slip { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.slip .muted { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
 
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);

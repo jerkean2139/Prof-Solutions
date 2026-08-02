@@ -19,6 +19,7 @@
       <button class="tab" data-view="fulfill">Fulfillment</button>
       <button class="tab" data-view="portal">Team portal</button>
       <button class="tab" data-view="dashboard">Dashboard</button>
+      <button class="tab" data-view="payouts">Payouts</button>
     </nav>
   </header>
 
@@ -154,6 +155,23 @@
         </div>
       </div>
     </section>
+    <!-- PAYOUTS -->
+    <section id="view-payouts" class="view">
+      <div class="row">
+        <label class="field">
+          <span>Status</span>
+          <select id="payStatus" autocomplete="off">
+            <option value="">All</option>
+            <option value="accrued" selected>Accrued</option>
+            <option value="approved">Approved</option>
+            <option value="paid">Paid</option>
+          </select>
+        </label>
+        <button id="payReload" class="btn ghost" type="button">Reload</button>
+      </div>
+      <div id="payList" class="scroll" style="max-height:none">Loading…</div>
+    </section>
+
     <!-- OWNER DASHBOARD -->
     <section id="view-dashboard" class="view">
       <div class="row" style="justify-content:space-between">

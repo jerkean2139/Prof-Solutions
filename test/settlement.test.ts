@@ -172,6 +172,9 @@ describe('settlement', () => {
     const accrued = await listCommissions({ status: 'accrued' });
     const mine = accrued.find((c: { campaign_id: string }) => c.campaign_id === saleId);
     expect(mine).toBeDefined();
+    // The payout run is enriched with a readable payee name and sale name.
+    expect(mine.payee_name).toBeTruthy();
+    expect(mine.campaign_name).toBeTruthy();
 
     // Cannot pay before approving.
     await expect(payCommission(mine.id)).rejects.toMatchObject({ status: 409 });

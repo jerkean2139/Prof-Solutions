@@ -229,10 +229,21 @@ export async function listCommissions(filter: {
       conditions.push(`${col} = $${params.length}`);
     }
   }
+  // Enrich with a human-readable payee name and the sale name, so a payout run
+  // reads without a second lookup. payee_id points at reps or sellers depending
+  // on payee_type; join both and coalesce.
+  const prefixed = conditions.map((c) => (c === 'deleted_at IS NULL' ? 'cl.deleted_at IS NULL' : `cl.${c}`));
   const { rows } = await pool.query(
-    `SELECT id, payee_type, payee_id, campaign_id, amount, status, approved_by, paid_at
-       FROM commission_ledger WHERE ${conditions.join(' AND ')}
-      ORDER BY created_at DESC`,
+    `SELECT cl.id, cl.payee_type, cl.payee_id, cl.campaign_id,
+            c.name AS campaign_name,
+            COALESCE(r.display_name, se.display_name, se.seller_code) AS payee_name,
+            cl.amount, cl.status, cl.approved_by, cl.paid_at
+       FROM commission_ledger cl
+       LEFT JOIN campaigns c ON c.id = cl.campaign_id
+       LEFT JOIN reps r ON r.id = cl.payee_id AND cl.payee_type = 'rep'
+       LEFT JOIN sellers se ON se.id = cl.payee_id AND cl.payee_type = 'seller'
+      WHERE ${prefixed.join(' AND ')}
+      ORDER BY cl.created_at DESC`,
     params,
   );
   return rows;

@@ -101,6 +101,12 @@ screen. Its views:
 - **Dashboard** — the owner's read-only rollup: revenue, gross margin, units,
   active teams, the sales pipeline, inventory health, reorder alerts, and top
   sellers.
+- **Payouts** — the commission run: accrued to approved to paid, one action per
+  row so the lifecycle is enforced in the UI as well as the API.
+
+The Fulfillment view also carries settlement: once a sale is delivered it shows
+the packing slip and a settle step that computes the reconciled payout breakdown
+and accrues commissions for the Payouts run.
 
 The PWA calls the same-origin API. While Clerk enforcement is off it uses the
 mock identity; when enforcement flips on it will attach a Clerk session.

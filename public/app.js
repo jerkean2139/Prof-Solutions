@@ -38,6 +38,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.view === 'receive') initReceiving();
     if (tab.dataset.view === 'fulfill') loadFulfillSales();
     if (tab.dataset.view === 'dashboard') loadDashboard();
+    if (tab.dataset.view === 'payouts') loadPayouts();
   });
 });
 
@@ -438,12 +439,15 @@ $('scanStop').addEventListener('click', stopScan);
 // re-read from the server after each action, so the screen never drifts.
 const fulfill = { sales: [], sale: null, pickList: null };
 
-async function loadFulfillSales() {
+async function loadFulfillSales(preferId) {
   const sel = $('fulfillSelect');
   try {
-    // Sales that still have fulfillment work: open, finalized, or picking.
+    // Sales anywhere in the fulfillment-through-settlement lifecycle. Settled
+    // sales stay listed so their reconciled breakdown remains reviewable.
     const all = await api('/sales');
-    fulfill.sales = all.filter((s) => ['open', 'finalized', 'picking'].includes(s.status));
+    fulfill.sales = all.filter((s) =>
+      ['open', 'finalized', 'picking', 'delivered', 'settled'].includes(s.status),
+    );
     sel.innerHTML = '';
     if (!fulfill.sales.length) {
       const o = document.createElement('option');
@@ -458,6 +462,7 @@ async function loadFulfillSales() {
       o.textContent = `${s.organization_name} — ${s.name} (${s.status})`;
       sel.appendChild(o);
     }
+    if (preferId && fulfill.sales.some((s) => s.id === preferId)) sel.value = preferId;
     renderFulfill(sel.value);
   } catch (e) {
     $('fulfillPanel').textContent = e.message;
@@ -492,13 +497,76 @@ async function renderFulfill(saleId) {
     if (sale.status === 'finalized' || sale.status === 'picking') {
       html += `<div class="ff-step"><h3>2. Pick list</h3><div id="ffPickArea">Loading pick list…</div></div>`;
     }
+
+    // Once delivered, the bulk shipment is out. Show the packing slip and the
+    // settle step (which computes payouts and accrues commissions).
+    if (sale.status === 'delivered' || sale.status === 'settled') {
+      html += `<div class="ff-step"><h3>2. Shipped</h3><span class="ff-badge ok">Delivered</span>
+        <div class="ff-actions"><button id="ffSlip" class="btn ghost" type="button">View packing slip</button></div>
+        <div id="ffSlipArea"></div></div>`;
+      html += `<div class="ff-step"><h3>3. Settle &amp; pay</h3><div id="ffSettleArea">Loading…</div></div>`;
+    }
+
     panel.innerHTML = html;
 
     if ($('ffFinalize')) $('ffFinalize').addEventListener('click', () => doFinalize(saleId));
     if (sale.status === 'finalized' || sale.status === 'picking') await renderPickArea(saleId, sale.status);
+    if (sale.status === 'delivered' || sale.status === 'settled') {
+      $('ffSlip').addEventListener('click', () => showPackingSlip(saleId));
+      await renderSettleArea(saleId, sale.status);
+    }
   } catch (e) {
     panel.textContent = e.message;
   }
+}
+
+async function showPackingSlip(saleId) {
+  const area = $('ffSlipArea');
+  area.innerHTML = 'Loading…';
+  try {
+    const pl = await api(`/sales/${saleId}/pick-list`);
+    if (!pl) { area.textContent = 'No pick list on file.'; return; }
+    const slip = await api(`/pick-lists/${pl.pick_list_id}/packing-slip`);
+    const addr = [slip.address_line1, slip.address_city, slip.address_state, slip.address_postal]
+      .filter(Boolean).join(', ');
+    area.innerHTML = `<div class="slip">
+      <div><strong>${slip.pick_list_number}</strong> — ${slip.sale_name}</div>
+      <div class="muted">Ship to ${slip.organization_name}${addr ? ' — ' + addr : ''}</div>
+      ${slip.shipment ? `<div class="muted">${slip.shipment.carrier || ''} ${slip.shipment.tracking_number || ''}</div>` : ''}
+      ${tableHtml(['SKU', 'Description', 'Required', 'Picked'],
+        slip.lines.map((l) => [l.sku_code, l.description || '', l.quantity_required, l.quantity_picked]))}
+    </div>`;
+  } catch (e) { area.textContent = e.message; }
+}
+
+async function renderSettleArea(saleId, status) {
+  const area = $('ffSettleArea');
+  try {
+    if (status === 'delivered') {
+      area.innerHTML = `<div>Settle this sale to compute payouts and accrue commissions.</div>` +
+        `<div class="ff-actions"><button id="ffSettle" class="btn primary">Settle sale</button></div>`;
+      $('ffSettle').addEventListener('click', async () => {
+        try {
+          await api(`/sales/${saleId}/settle`, { method: 'POST' });
+          toast('Sale settled');
+          loadFulfillSales(saleId);
+        } catch (e) { toast('Settle failed: ' + e.message); }
+      });
+      return;
+    }
+    // settled: show the reconciled breakdown, read-only.
+    const s = await api(`/sales/${saleId}/settlement`);
+    area.innerHTML = `<span class="ff-badge ok">Settled</span>` +
+      tableHtml(['Line', 'Amount'], [
+        ['Gross revenue', usd(s.gross_revenue)],
+        ['Organization payout', usd(s.organization_payout)],
+        ['Distributor commission', usd(s.distributor_commission)],
+        ['Seller commission', usd(s.seller_commission)],
+        ['Product cost', usd(s.product_cost_total)],
+        ['Gross profit', usd(s.gross_profit)],
+      ]) +
+      `<div class="muted" style="margin-top:8px">Commissions accrued. Approve and pay them in the Payouts tab.</div>`;
+  } catch (e) { area.textContent = e.message; }
 }
 
 async function doFinalize(saleId) {
@@ -510,7 +578,7 @@ async function doFinalize(saleId) {
   try {
     await api(`/sales/${saleId}/finalize`, { method: 'POST', body: JSON.stringify(body) });
     toast('Sale finalized');
-    renderFulfill(saleId);
+    loadFulfillSales(saleId);
   } catch (e) { toast('Finalize failed: ' + e.message); }
 }
 
@@ -594,7 +662,7 @@ async function renderPickArea(saleId, status) {
           await api(`/pick-lists/${pl.pick_list_id}/ship`, { method: 'POST', body: JSON.stringify(body) });
           toast('Shipped to the team');
           fulfill.pickList = null;
-          loadFulfillSales();
+          loadFulfillSales(saleId);
         } catch (e) { toast('Ship failed: ' + e.message); }
       });
     }
@@ -655,6 +723,54 @@ function stat(val, lbl, warn) {
 }
 
 $('dashReload').addEventListener('click', () => loadDashboard());
+
+// ---- payouts ----
+// The commission payout run: accrued -> approved -> paid. Each row shows the
+// one action available for its state, so the lifecycle is enforced by the UI as
+// well as the API.
+async function loadPayouts() {
+  const area = $('payList');
+  const status = $('payStatus').value;
+  area.innerHTML = 'Loading…';
+  try {
+    const rows = await api('/commissions' + (status ? `?status=${status}` : ''));
+    if (!rows.length) { area.textContent = 'No commissions for this filter.'; return; }
+    const head = '<tr><th>Payee</th><th>Type</th><th>Sale</th><th class="num">Amount</th><th>Status</th><th></th></tr>';
+    const body = rows.map((c) => {
+      let action = '';
+      if (c.status === 'accrued') action = `<button class="btn pay-approve" data-id="${c.id}">Approve</button>`;
+      else if (c.status === 'approved') action = `<button class="btn primary pay-pay" data-id="${c.id}">Pay</button>`;
+      else action = `<span class="ff-badge ok">paid</span>`;
+      return `<tr>
+        <td>${c.payee_name || '(unknown)'}</td>
+        <td>${c.payee_type}</td>
+        <td>${c.campaign_name || ''}</td>
+        <td class="num">${usd(c.amount)}</td>
+        <td>${c.status}</td>
+        <td>${action}</td>
+      </tr>`;
+    }).join('');
+    area.innerHTML = `<table>${head}${body}</table>`;
+
+    area.querySelectorAll('.pay-approve').forEach((b) =>
+      b.addEventListener('click', () => payAction(b.getAttribute('data-id'), 'approve')));
+    area.querySelectorAll('.pay-pay').forEach((b) =>
+      b.addEventListener('click', () => payAction(b.getAttribute('data-id'), 'pay')));
+  } catch (e) {
+    area.textContent = e.message;
+  }
+}
+
+async function payAction(id, action) {
+  try {
+    await api(`/commissions/${id}/${action}`, { method: 'POST' });
+    toast(action === 'approve' ? 'Approved' : 'Marked paid');
+    loadPayouts();
+  } catch (e) { toast('Failed: ' + e.message); }
+}
+
+$('payStatus').addEventListener('change', () => loadPayouts());
+$('payReload').addEventListener('click', () => loadPayouts());
 
 // ---- boot ----
 loadSales().catch((e) => toast(e.message));
