@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b5" />
+  <title>Profitable Solutions</title>
+  <link rel="manifest" href="/app/manifest.webmanifest" />
+  <link rel="icon" href="/app/icon.svg" />
+  <link rel="apple-touch-icon" href="/app/icon.svg" />
+  <link rel="stylesheet" href="/app/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Profitable Solutions</div>
+    <nav class="tabs">
+      <button class="tab is-active" data-view="entry">Order entry</button>
+      <button class="tab" data-view="sales">Sales</button>
+      <button class="tab" data-view="receive">Receiving</button>
+      <button class="tab" data-view="fulfill">Fulfillment</button>
+      <button class="tab" data-view="portal">Team portal</button>
+      <button class="tab" data-view="catalog">Catalog</button>
+      <button class="tab" data-view="purchasing">Purchasing</button>
+      <button class="tab" data-view="dashboard">Dashboard</button>
+      <button class="tab" data-view="payouts">Payouts</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ORDER ENTRY -->
+    <section id="view-entry" class="view is-active">
+      <div class="row">
+        <label class="field grow">
+          <span>Sale</span>
+          <select id="saleSelect" autocomplete="off"></select>
+        </label>
+        <button id="reloadSales" class="btn ghost" title="Reload open sales">Reload</button>
+      </div>
+
+      <div class="row">
+        <label class="field grow">
+          <span>Buyer name</span>
+          <input id="buyerName" type="text" autocomplete="off" placeholder="Type buyer name, Enter to jump to items" />
+        </label>
+        <label class="field">
+          <span>Seller code</span>
+          <input id="sellerCode" type="text" autocomplete="off" placeholder="optional" />
+        </label>
+      </div>
+
+      <div class="row line-entry">
+        <label class="field grow">
+          <span>SKU code</span>
+          <input id="skuCode" type="text" autocomplete="off" placeholder="Type code, Enter" />
+          <small id="skuHint" class="hint"></small>
+        </label>
+        <label class="field qty">
+          <span>Qty</span>
+          <input id="qty" type="number" min="1" inputmode="numeric" value="1" />
+        </label>
+        <button id="addLine" class="btn">Add</button>
+      </div>
+
+      <table class="lines" id="linesTable" hidden>
+        <thead><tr><th>Code</th><th>Product</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Line</th><th></th></tr></thead>
+        <tbody id="linesBody"></tbody>
+      </table>
+
+      <div class="totalbar">
+        <div>Items: <strong id="itemCount">0</strong></div>
+        <div class="total">Total: <strong id="orderTotal">$0.00</strong></div>
+        <button id="saveOrder" class="btn primary" disabled>Save &amp; next</button>
+      </div>
+
+      <details class="ref">
+        <summary>Products in this sale</summary>
+        <div id="skuRef" class="ref-list"></div>
+      </details>
+
+      <div id="toast" class="toast" hidden></div>
+    </section>
+
+    <!-- SALES -->
+    <section id="view-sales" class="view">
+      <div class="card">
+        <h3>Start a new sale</h3>
+        <div class="row">
+          <label class="field grow"><span>Team</span><select id="nsOrg"></select></label>
+          <label class="field grow"><span>Sale name</span><input id="nsName" type="text" autocomplete="off" placeholder="e.g. Fall 2026 Fundraiser" /></label>
+          <label class="field"><span>Goal (optional)</span><input id="nsGoal" type="text" inputmode="decimal" placeholder="5000.00" /></label>
+        </div>
+        <div class="field">
+          <span>Products offered (check at least one; blank price uses the SKU price)</span>
+          <div id="nsSkus" class="ns-skus">Loading…</div>
+        </div>
+        <div class="ff-actions">
+          <button id="nsCreate" class="btn primary">Create &amp; open sale</button>
+          <label class="chk"><input id="nsOpen" type="checkbox" checked /> Open immediately</label>
+        </div>
+        <small id="nsHint" class="hint"></small>
+      </div>
+
+      <div class="card">
+        <h3>Sales</h3>
+        <div id="nsList" class="scroll">Loading…</div>
+      </div>
+    </section>
+
+    <!-- RECEIVING -->
+    <section id="view-receive" class="view">
+      <div class="row">
+        <label class="field grow">
+          <span>Warehouse</span>
+          <select id="whSelect" autocomplete="off"></select>
+        </label>
+        <button id="scanBtn" class="btn ghost" type="button">Scan a code</button>
+      </div>
+
+      <div id="scanBox" class="scanbox" hidden>
+        <video id="scanVideo" playsinline muted></video>
+        <button id="scanStop" class="btn ghost" type="button">Stop camera</button>
+        <small id="scanNote" class="hint"></small>
+      </div>
+
+      <div class="row line-entry">
+        <label class="field grow">
+          <span>Code (scan or type)</span>
+          <input id="recvCode" type="text" autocomplete="off" placeholder="SKU or QR code, Enter" />
+          <small id="recvHint" class="hint"></small>
+        </label>
+        <label class="field qty">
+          <span>Qty</span>
+          <input id="recvQty" type="number" min="1" inputmode="numeric" value="1" />
+        </label>
+        <button id="recvAdd" class="btn primary">Receive</button>
+      </div>
+
+      <div id="recvResolved" class="resolved" hidden></div>
+
+      <table class="lines" id="recvTable" hidden>
+        <thead><tr><th>Time</th><th>Code</th><th>Product</th><th class="num">Qty in</th><th class="num">On hand</th></tr></thead>
+        <tbody id="recvBody"></tbody>
+      </table>
+
+      <details class="ref">
+        <summary>Adjust / correct a count</summary>
+        <div class="row" style="margin-top:12px">
+          <label class="field grow"><span>Code (scan or type)</span><input id="adjCode" type="text" autocomplete="off" placeholder="SKU or QR code" /></label>
+          <label class="field qty"><span>Change</span><input id="adjDelta" type="number" inputmode="numeric" placeholder="-3" /></label>
+        </div>
+        <div class="row">
+          <label class="field grow"><span>Reason (required)</span><input id="adjReason" type="text" autocomplete="off" placeholder="e.g. damaged in transit, recount" /></label>
+          <button id="adjBtn" class="btn">Adjust</button>
+        </div>
+        <small id="adjHint" class="hint"></small>
+      </details>
+
+      <details class="ref">
+        <summary>Catalog</summary>
+        <div id="recvRef" class="ref-list"></div>
+      </details>
+    </section>
+
+    <!-- FULFILLMENT -->
+    <section id="view-fulfill" class="view">
+      <div class="row">
+        <label class="field grow">
+          <span>Sale</span>
+          <select id="fulfillSelect" autocomplete="off"></select>
+        </label>
+        <button id="fulfillReload" class="btn ghost" type="button">Reload</button>
+      </div>
+      <div id="fulfillPanel" class="scroll" style="max-height:none">Pick a sale to begin.</div>
+    </section>
+
+    <!-- TEAM PORTAL -->
+    <section id="view-portal" class="view">
+      <div class="row">
+        <label class="field grow">
+          <span>Team</span>
+          <select id="orgSelect" autocomplete="off"></select>
+        </label>
+      </div>
+      <div id="countdown" class="countdown" hidden></div>
+      <div class="card">
+        <div class="row" style="margin-bottom:0">
+          <label class="field grow"><span>Find an order by number</span><input id="findOrderNum" type="text" autocomplete="off" placeholder="e.g. ORD-00012, Enter" /></label>
+          <button id="findOrderBtn" class="btn">Find</button>
+        </div>
+        <div id="findOrderResult"></div>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <h3>Order history</h3>
+          <div id="orderHistory" class="scroll">Pick a sale in Order entry to see its orders.</div>
+        </div>
+        <div class="card">
+          <h3>Customer base</h3>
+          <div id="customerBase" class="scroll">Select a team.</div>
+        </div>
+        <div class="card">
+          <h3>Seller leaderboard</h3>
+          <div id="leaderboard" class="scroll">Select a team.</div>
+        </div>
+      </div>
+    </section>
+    <!-- CATALOG -->
+    <section id="view-catalog" class="view">
+      <div class="cards">
+        <div class="card">
+          <h3>Add product</h3>
+          <div class="row">
+            <label class="field grow"><span>Name</span><input id="pName" type="text" autocomplete="off" /></label>
+            <label class="field grow"><span>Brand</span><input id="pBrand" type="text" autocomplete="off" /></label>
+          </div>
+          <div class="row">
+            <label class="field"><span>Category</span>
+              <select id="pCategory">
+                <option value="detergent">Detergent</option>
+                <option value="candle">Candle</option>
+                <option value="topical">Topical</option>
+              </select>
+            </label>
+            <label class="field grow"><span>Owner entity</span>
+              <input id="pOwner" type="text" autocomplete="off" value="profitable_solutions" />
+            </label>
+            <button id="pAdd" class="btn primary">Add product</button>
+          </div>
+          <small id="pHint" class="hint"></small>
+        </div>
+
+        <div class="card">
+          <h3>Add SKU</h3>
+          <div class="row">
+            <label class="field grow"><span>Product</span><select id="sProduct"></select></label>
+          </div>
+          <div class="row">
+            <label class="field grow"><span>SKU code</span><input id="sCode" type="text" autocomplete="off" placeholder="e.g. CAN-3PK" /></label>
+            <label class="field grow"><span>QR code</span><input id="sQr" type="text" autocomplete="off" placeholder="e.g. QR-CAN-3PK" /></label>
+          </div>
+          <div class="row">
+            <label class="field"><span>Retail price</span><input id="sPrice" type="text" inputmode="decimal" placeholder="45.00" /></label>
+            <label class="field"><span>Unit cost</span><input id="sCost" type="text" inputmode="decimal" placeholder="14.00" /></label>
+            <label class="field grow"><span>Unit config</span><input id="sConfig" type="text" autocomplete="off" placeholder="3-pack" /></label>
+            <button id="sAdd" class="btn primary">Add SKU</button>
+          </div>
+          <small id="sHint" class="hint"></small>
+        </div>
+      </div>
+
+      <div class="cards">
+        <div class="card"><h3>Products</h3><div id="catProducts" class="scroll">Loading…</div></div>
+        <div class="card"><h3>SKUs</h3><div id="catSkus" class="scroll">Loading…</div></div>
+      </div>
+    </section>
+
+    <!-- PAYOUTS -->
+    <section id="view-payouts" class="view">
+      <div class="row">
+        <label class="field">
+          <span>Status</span>
+          <select id="payStatus" autocomplete="off">
+            <option value="">All</option>
+            <option value="accrued" selected>Accrued</option>
+            <option value="approved">Approved</option>
+            <option value="paid">Paid</option>
+          </select>
+        </label>
+        <button id="payReload" class="btn ghost" type="button">Reload</button>
+        <button id="expPayouts" class="btn ghost" type="button">Export CSV</button>
+      </div>
+      <div id="payList" class="scroll" style="max-height:none">Loading…</div>
+    </section>
+
+    <!-- PURCHASING -->
+    <section id="view-purchasing" class="view">
+      <div class="cards">
+        <div class="card">
+          <h3>Create purchase order</h3>
+          <div class="row">
+            <label class="field grow"><span>Vendor</span><select id="poVendor"></select></label>
+          </div>
+          <div class="row line-entry">
+            <label class="field grow"><span>SKU</span><select id="poSku"></select></label>
+            <label class="field qty"><span>Qty</span><input id="poQty" type="number" min="1" inputmode="numeric" value="1" /></label>
+            <label class="field qty"><span>Unit cost</span><input id="poCost" type="text" inputmode="decimal" placeholder="14.00" /></label>
+            <button id="poAddLine" class="btn">Add</button>
+          </div>
+          <table class="lines" id="poLinesTable" hidden>
+            <thead><tr><th>SKU</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Line</th><th></th></tr></thead>
+            <tbody id="poLinesBody"></tbody>
+          </table>
+          <div class="totalbar" style="position:static">
+            <div class="total" style="margin-left:auto">PO total: <strong id="poTotal">$0.00</strong></div>
+            <button id="poCreate" class="btn primary" disabled>Create PO</button>
+          </div>
+          <small id="poHint" class="hint"></small>
+        </div>
+
+        <div class="card">
+          <h3>Add vendor</h3>
+          <div class="row">
+            <label class="field grow"><span>Name</span><input id="vName" type="text" autocomplete="off" /></label>
+            <label class="field grow"><span>Contact</span><input id="vContact" type="text" autocomplete="off" placeholder="optional" /></label>
+          </div>
+          <div class="row">
+            <label class="field grow"><span>Payment terms</span><input id="vTerms" type="text" autocomplete="off" placeholder="e.g. Net 30" /></label>
+            <label class="field"><span>Lead days</span><input id="vLead" type="number" min="0" inputmode="numeric" placeholder="14" /></label>
+            <button id="vAdd" class="btn primary">Add vendor</button>
+          </div>
+          <small id="vHint" class="hint"></small>
+          <div id="vendorList" class="scroll" style="margin-top:10px">Loading…</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Purchase orders</h3>
+        <div id="poList" class="scroll" style="max-height:none">Loading…</div>
+        <div id="poDetail"></div>
+      </div>
+    </section>
+
+    <!-- OWNER DASHBOARD -->
+    <section id="view-dashboard" class="view">
+      <div class="row" style="justify-content:space-between">
+        <div class="brand" style="color:var(--ink);padding:0">Business at a glance</div>
+        <button id="dashReload" class="btn ghost" type="button">Reload</button>
+      </div>
+      <div id="dashStats" class="stats"></div>
+      <div class="cards">
+        <div class="card"><h3>Revenue by entity and channel</h3><div id="dashMargin" class="scroll">Loading…</div></div>
+        <div class="card"><h3>Sales pipeline</h3><div id="dashPipeline" class="scroll">Loading…</div></div>
+        <div class="card"><h3>Reorder alerts</h3><div id="dashReorder" class="scroll">Loading…</div></div>
+        <div class="card"><h3>Top sellers</h3><div id="dashSellers" class="scroll">Loading…</div></div>
+        <div class="card"><div class="card-head"><h3>Inventory on hand</h3><button id="expInventory" class="btn ghost sm" type="button">Export CSV</button></div><div id="dashInventory" class="scroll">Loading…</div></div>
+        <div class="card"><div class="card-head"><h3>Master client list</h3><button id="expCustomers" class="btn ghost sm" type="button">Export CSV</button></div><div id="dashCustomers" class="scroll">Loading…</div></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app/app.js"></script>
+</body>
+</html>

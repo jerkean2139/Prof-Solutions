@@ -98,6 +98,46 @@ export async function openSale(saleId: string) {
   return rows[0];
 }
 
+// List sales, newest first, optionally filtered by organization and status.
+export async function listSales(filter: { organizationId?: string; status?: string }) {
+  const conditions = ['c.deleted_at IS NULL'];
+  const params: unknown[] = [];
+  if (filter.organizationId) {
+    params.push(filter.organizationId);
+    conditions.push(`c.organization_id = $${params.length}`);
+  }
+  if (filter.status) {
+    params.push(filter.status);
+    conditions.push(`c.status = $${params.length}`);
+  }
+  const { rows } = await pool.query(
+    `SELECT c.id, c.name, c.status, c.channel, c.organization_id, o.name AS organization_name,
+            c.goal_amount, c.next_sale_target, c.created_at
+       FROM campaigns c JOIN organizations o ON o.id = c.organization_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY c.created_at DESC`,
+    params,
+  );
+  return rows;
+}
+
+// The products offered in a sale, with the effective price (override or SKU
+// price). This is what the order-entry screen loads once and matches typed
+// codes against, so there is no round trip per line.
+export async function getSaleSkus(saleId: string) {
+  const { rows } = await pool.query(
+    `SELECT cs.sku_id, s.sku_code, p.name AS product_name, s.unit_config,
+            COALESCE(cs.price_override, s.retail_price) AS price
+       FROM campaign_skus cs
+       JOIN skus s ON s.id = cs.sku_id
+       JOIN products p ON p.id = s.product_id
+      WHERE cs.campaign_id = $1 AND cs.deleted_at IS NULL
+      ORDER BY s.sku_code`,
+    [saleId],
+  );
+  return rows;
+}
+
 export async function getSale(saleId: string) {
   const { rows } = await pool.query(
     `SELECT c.id, c.name, c.status, c.channel, c.organization_id, c.finalized_at,

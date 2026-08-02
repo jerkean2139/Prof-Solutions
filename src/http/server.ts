@@ -1,3 +1,5 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { env } from '../config/env.js';
 import { logger } from '../logger.js';
@@ -11,6 +13,14 @@ import { organizationRoutes } from '../domain/organizations/routes.js';
 import { salesRoutes } from '../domain/sales/routes.js';
 import { orderRoutes, orderInputSchema } from '../domain/orders/routes.js';
 import { createOrder } from '../domain/orders/service.js';
+import { fulfillmentRoutes } from '../domain/fulfillment/routes.js';
+import { settlementRoutes } from '../domain/settlement/routes.js';
+import { reportRoutes } from '../domain/reports/routes.js';
+import { vendorRoutes } from '../domain/vendors/routes.js';
+import { forecastRoutes } from '../domain/forecast/routes.js';
+import { dashboardRoutes } from '../domain/dashboard/routes.js';
+import { agentRoutes } from '../domain/agent/routes.js';
+import { customerRoutes } from '../domain/customers/routes.js';
 
 // Phase 0 HTTP surface: a health check, the auth boundary wired but not
 // enforced, and webhook intake stubs. No business endpoints yet. The point is
@@ -28,6 +38,11 @@ export function createServer() {
       },
     }),
   );
+
+  // The installable PWA (order entry + team portal). Served by the same app so
+  // there is no separate frontend build or deploy. The API is same-origin.
+  const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'public');
+  app.use('/app', express.static(publicDir));
 
   app.get('/health', async (_req: Request, res: Response) => {
     try {
@@ -93,6 +108,14 @@ export function createServer() {
   app.use(organizationRoutes());
   app.use(salesRoutes());
   app.use(orderRoutes());
+  app.use(fulfillmentRoutes());
+  app.use(settlementRoutes());
+  app.use(reportRoutes());
+  app.use(vendorRoutes());
+  app.use(forecastRoutes());
+  app.use(dashboardRoutes());
+  app.use(agentRoutes());
+  app.use(customerRoutes());
 
   // Central error handler. Maps AppError to its status, respects any error that
   // already carries an HTTP status (e.g. body-parser's 400 on malformed JSON),

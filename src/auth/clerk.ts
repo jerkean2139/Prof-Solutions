@@ -32,39 +32,52 @@ const MOCK_AUTH: AuthContext = {
   source: 'mock',
 };
 
-// Enforced verification is loaded lazily so tests and Phase 0 never need real
-// Clerk keys just to import this module.
-async function verifyClerkSession(req: Request): Promise<AuthContext | null> {
+// A token verifier maps a bearer token to Clerk claims, or null if invalid.
+// It is injectable so the enforced path can be tested without real Clerk keys,
+// and so a different provider could be swapped in without touching callers.
+export interface ClerkClaims {
+  sub: string;
+  org_id?: string;
+}
+export type TokenVerifier = (token: string) => Promise<ClerkClaims | null>;
+
+// The default verifier loads @clerk/backend lazily so nothing needs real keys
+// just to import this module.
+const defaultVerify: TokenVerifier = async (token) => {
   const { verifyToken } = await import('@clerk/backend');
-  const header = req.header('authorization') ?? '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  if (!token) return null;
   try {
     const claims = await verifyToken(token, { secretKey: env.CLERK_SECRET_KEY });
-    return {
-      userId: claims.sub,
-      orgId: (claims.org_id as string | undefined) ?? null,
-      source: 'clerk',
-    };
+    return { sub: claims.sub, org_id: claims.org_id as string | undefined };
   } catch (err) {
     logger.warn({ err: (err as Error).message }, 'clerk token verification failed');
     return null;
   }
-}
+};
 
-export function requireAuth() {
+// Guards a route. With enforcement off it injects the mock identity; with it on
+// it requires a valid bearer token. `enforced` and `verify` default to the real
+// values and can be overridden (tests, alternate providers).
+export function requireAuth(opts?: { enforced?: boolean; verify?: TokenVerifier }) {
+  const enforced = opts?.enforced ?? env.AUTH_ENFORCED;
+  const verify = opts?.verify ?? defaultVerify;
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (!env.AUTH_ENFORCED) {
+    if (!enforced) {
       req.auth = MOCK_AUTH;
       next();
       return;
     }
-    const ctx = await verifyClerkSession(req);
-    if (!ctx) {
+    const header = req.header('authorization') ?? '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+    if (!token) {
       res.status(401).json({ error: 'unauthenticated' });
       return;
     }
-    req.auth = ctx;
+    const claims = await verify(token);
+    if (!claims) {
+      res.status(401).json({ error: 'unauthenticated' });
+      return;
+    }
+    req.auth = { userId: claims.sub, orgId: claims.org_id ?? null, source: 'clerk' };
     next();
   };
 }

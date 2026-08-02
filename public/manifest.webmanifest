@@ -1,0 +1,13 @@
+{
+  "name": "Profitable Solutions",
+  "short_name": "ProfSol",
+  "description": "Order entry and team portal for Profitable Solutions fundraising",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#f4f6f5",
+  "theme_color": "#0b8a55",
+  "icons": [
+    { "src": "/app/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -107,6 +107,39 @@ export async function adjustStock(input: AdjustInput) {
   return rows[0];
 }
 
+// Active warehouses, for the receiving screen to target. The UI assumes one
+// warehouse; the schema supports many, so this returns all active ones and the
+// screen defaults to the first.
+export async function listWarehouses() {
+  const { rows } = await pool.query(
+    `SELECT id, name, address_city, address_state, active
+       FROM warehouses
+      WHERE active = true AND deleted_at IS NULL
+      ORDER BY name`,
+  );
+  return rows;
+}
+
+// The whole catalog's stock position in one read, summed across warehouses.
+// Answers the warehouse's core question -- "what do we have?" -- from the
+// snapshot cache. Includes SKUs with no snapshot yet (zero on hand) so a newly
+// added product still appears.
+export async function listInventory() {
+  const { rows } = await pool.query(
+    `SELECT s.id AS sku_id, s.sku_code, p.name AS product_name,
+            COALESCE(SUM(snap.quantity_on_hand), 0)::int AS on_hand,
+            COALESCE(SUM(snap.quantity_committed), 0)::int AS committed,
+            COALESCE(SUM(snap.quantity_available), 0)::int AS available
+       FROM skus s
+       JOIN products p ON p.id = s.product_id
+       LEFT JOIN inventory_snapshots snap ON snap.sku_id = s.id
+      WHERE s.deleted_at IS NULL
+      GROUP BY s.id, s.sku_code, p.name
+      ORDER BY s.sku_code`,
+  );
+  return rows;
+}
+
 // On-hand read comes from the snapshot cache. Reports that answer "can we
 // fulfill this" must use available (on_hand minus committed), which the snapshot
 // exposes as a generated column.

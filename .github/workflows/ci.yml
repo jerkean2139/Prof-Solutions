@@ -71,6 +71,15 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Compile the production bundle. CI runs the app via tsx, so without this
+      # a broken build (wrong emit paths, tests leaking into dist) would ship
+      # unnoticed and only fail at `npm start` in production.
+      - name: Build (production bundle)
+        run: |
+          npm run build
+          test -f dist/http/server.js || { echo "expected dist/http/server.js"; exit 1; }
+          test -f dist/worker.js || { echo "expected dist/worker.js"; exit 1; }
+
       - name: Apply migrations (smoke the runner)
         run: npm run migrate:up
 

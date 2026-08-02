@@ -15,7 +15,10 @@ export interface OrderLineInput {
 export interface CreateOrderInput {
   campaignId: string;
   buyer: {
-    ghlContactId: string;
+    // Online orders carry the GHL contact id. Paper/phone entry has no GHL
+    // contact yet, so it is optional and a provisional local id is assigned;
+    // that customer is flagged for a later GHL push (reconciliation not built).
+    ghlContactId?: string;
     displayName?: string;
     email?: string;
     phone?: string;
@@ -70,6 +73,9 @@ export async function createOrder(input: CreateOrderInput) {
   return withTransaction(async (client) => {
     // Customer upsert. GHL owns identity; we key on ghl_contact_id and keep an
     // operational record that feeds the org list and the master list.
+    // Paper/phone buyers have no GHL identity yet; give them a provisional id
+    // so the customer record exists and can be pushed to GHL later.
+    const ghlContactId = input.buyer.ghlContactId ?? `local-${randomUUID()}`;
     const customer = await client.query<{ id: string }>(
       `INSERT INTO customers (ghl_contact_id, display_name, email, phone, first_order_at, created_by)
        VALUES ($1,$2,$3,$4, now(), $5)
@@ -79,7 +85,7 @@ export async function createOrder(input: CreateOrderInput) {
              phone = COALESCE(EXCLUDED.phone, customers.phone)
        RETURNING id`,
       [
-        input.buyer.ghlContactId,
+        ghlContactId,
         input.buyer.displayName ?? null,
         input.buyer.email ?? null,
         input.buyer.phone ?? null,
@@ -179,6 +185,34 @@ export async function getOrder(id: string) {
   const lines = await pool.query(
     `SELECT sku_id, quantity, unit_price, extended FROM order_lines WHERE order_id=$1 ORDER BY created_at`,
     [id],
+  );
+  return { ...order.rows[0], lines: lines.rows };
+}
+
+// Look up one order by its number, the way a customer or a staff member refers
+// to it. Enriched with the sale, buyer, seller, and readable line items so the
+// answer to "where's order X?" is complete in one call.
+export async function getOrderByNumber(orderNumber: string) {
+  const order = await pool.query(
+    `SELECT o.id, o.campaign_id, c.name AS sale_name, o.order_number, o.entry_channel,
+            o.subtotal, o.status, o.created_at,
+            cust.display_name AS buyer_name,
+            sel.display_name AS seller_name, sel.seller_code
+       FROM orders o
+       JOIN campaigns c ON c.id = o.campaign_id
+       LEFT JOIN customers cust ON cust.id = o.customer_id
+       LEFT JOIN sellers sel ON sel.id = o.seller_id
+      WHERE o.order_number = $1 AND o.deleted_at IS NULL`,
+    [orderNumber],
+  );
+  if (order.rowCount === 0) throw notFound(`order ${orderNumber} not found`);
+  const lines = await pool.query(
+    `SELECT ol.sku_id, s.sku_code, p.name AS product_name, ol.quantity, ol.unit_price, ol.extended
+       FROM order_lines ol
+       JOIN skus s ON s.id = ol.sku_id
+       JOIN products p ON p.id = s.product_id
+      WHERE ol.order_id = $1 ORDER BY s.sku_code`,
+    [order.rows[0]!.id],
   );
   return { ...order.rows[0], lines: lines.rows };
 }

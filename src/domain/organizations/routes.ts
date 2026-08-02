@@ -10,6 +10,7 @@ import {
   getOrganization,
   addSeller,
   listSellers,
+  listOrgCustomers,
 } from './service.js';
 
 const registerSchema = z.object({
@@ -86,6 +87,14 @@ export function organizationRoutes(): Router {
     '/organizations/:id/sellers',
     asyncHandler(async (req: Request, res: Response) => {
       res.json(await listSellers(req.params.id as string));
+    }),
+  );
+
+  // The team's customer base view.
+  r.get(
+    '/organizations/:id/customers',
+    asyncHandler(async (req: Request, res: Response) => {
+      res.json(await listOrgCustomers(req.params.id as string));
     }),
   );
 

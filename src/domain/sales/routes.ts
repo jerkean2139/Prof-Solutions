@@ -4,7 +4,7 @@ import { asyncHandler } from '../../http/asyncHandler.js';
 import { requireAuth } from '../../auth/clerk.js';
 import { resolveInternalUserId } from '../../auth/user.js';
 import { badRequest } from '../../http/errors.js';
-import { createSale, openSale, getSale, finalizeSale } from './service.js';
+import { createSale, openSale, getSale, finalizeSale, listSales, getSaleSkus } from './service.js';
 
 const money = z.string().regex(/^\d+(\.\d{1,2})?$/, 'must be a decimal like 5000.00');
 
@@ -42,9 +42,28 @@ export function salesRoutes(): Router {
   );
 
   r.get(
+    '/sales',
+    asyncHandler(async (req: Request, res: Response) => {
+      res.json(
+        await listSales({
+          organizationId: req.query.organizationId ? String(req.query.organizationId) : undefined,
+          status: req.query.status ? String(req.query.status) : undefined,
+        }),
+      );
+    }),
+  );
+
+  r.get(
     '/sales/:id',
     asyncHandler(async (req: Request, res: Response) => {
       res.json(await getSale(req.params.id as string));
+    }),
+  );
+
+  r.get(
+    '/sales/:id/skus',
+    asyncHandler(async (req: Request, res: Response) => {
+      res.json(await getSaleSkus(req.params.id as string));
     }),
   );
 

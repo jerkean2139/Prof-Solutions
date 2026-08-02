@@ -4,7 +4,7 @@ import { asyncHandler } from '../../http/asyncHandler.js';
 import { requireAuth } from '../../auth/clerk.js';
 import { resolveInternalUserId } from '../../auth/user.js';
 import { badRequest } from '../../http/errors.js';
-import { receiveStock, adjustStock, getOnHand } from './service.js';
+import { receiveStock, adjustStock, getOnHand, listWarehouses, listInventory } from './service.js';
 
 const money = z.string().regex(/^\d+(\.\d{1,2})?$/, 'must be a decimal like 18.50');
 
@@ -56,6 +56,22 @@ export function inventoryRoutes(): Router {
       if (!parsed.success) throw badRequest(parsed.error.issues[0]!.message);
       const createdBy = await resolveInternalUserId(req.auth);
       res.status(201).json(await adjustStock({ ...parsed.data, createdBy }));
+    }),
+  );
+
+  // Whole-catalog stock position (on hand / committed / available per SKU).
+  r.get(
+    '/inventory',
+    asyncHandler(async (_req: Request, res: Response) => {
+      res.json(await listInventory());
+    }),
+  );
+
+  // Active warehouses, for the receiving screen to target.
+  r.get(
+    '/warehouses',
+    asyncHandler(async (_req: Request, res: Response) => {
+      res.json(await listWarehouses());
     }),
   );
 

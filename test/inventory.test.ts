@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { pool } from '../src/db/pool.js';
 import { ensureMigrated, wipeDomain } from './helpers.js';
-import { receiveStock, adjustStock, getOnHand } from '../src/domain/inventory/service.js';
+import { receiveStock, adjustStock, getOnHand, listInventory } from '../src/domain/inventory/service.js';
 
 let warehouseId: string;
 let skuId: string;
@@ -75,5 +75,24 @@ describe('inventory ledger', () => {
     );
     const snap = await getOnHand(skuId);
     expect(snap[0].quantity_on_hand).toBe(Number(ledger.rows[0]!.sum));
+  });
+
+  it('lists whole-catalog stock, including a SKU with no receipts as zero', async () => {
+    // A brand-new SKU with no ledger activity still appears, at zero on hand.
+    const prod = await pool.query(
+      `SELECT product_id FROM skus WHERE id=$1`,
+      [skuId],
+    );
+    await pool.query(
+      `INSERT INTO skus (product_id, sku_code, qr_code) VALUES ($1,'SKU-2','QR-2')`,
+      [prod.rows[0].product_id],
+    );
+    const rows = await listInventory();
+    const one = rows.find((r: { sku_code: string }) => r.sku_code === 'SKU-1');
+    const two = rows.find((r: { sku_code: string }) => r.sku_code === 'SKU-2');
+    expect(one.on_hand).toBe(240); // 200 + 50 - 10
+    expect(one.available).toBe(240);
+    expect(two.on_hand).toBe(0);
+    expect(two.product_name).toBeTruthy();
   });
 });
