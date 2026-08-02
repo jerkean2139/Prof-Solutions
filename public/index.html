@@ -15,6 +15,7 @@
     <div class="brand">Profitable Solutions</div>
     <nav class="tabs">
       <button class="tab is-active" data-view="entry">Order entry</button>
+      <button class="tab" data-view="sales">Sales</button>
       <button class="tab" data-view="receive">Receiving</button>
       <button class="tab" data-view="fulfill">Fulfillment</button>
       <button class="tab" data-view="portal">Team portal</button>
@@ -76,6 +77,32 @@
       </details>
 
       <div id="toast" class="toast" hidden></div>
+    </section>
+
+    <!-- SALES -->
+    <section id="view-sales" class="view">
+      <div class="card">
+        <h3>Start a new sale</h3>
+        <div class="row">
+          <label class="field grow"><span>Team</span><select id="nsOrg"></select></label>
+          <label class="field grow"><span>Sale name</span><input id="nsName" type="text" autocomplete="off" placeholder="e.g. Fall 2026 Fundraiser" /></label>
+          <label class="field"><span>Goal (optional)</span><input id="nsGoal" type="text" inputmode="decimal" placeholder="5000.00" /></label>
+        </div>
+        <div class="field">
+          <span>Products offered (check at least one; blank price uses the SKU price)</span>
+          <div id="nsSkus" class="ns-skus">Loading…</div>
+        </div>
+        <div class="ff-actions">
+          <button id="nsCreate" class="btn primary">Create &amp; open sale</button>
+          <label class="chk"><input id="nsOpen" type="checkbox" checked /> Open immediately</label>
+        </div>
+        <small id="nsHint" class="hint"></small>
+      </div>
+
+      <div class="card">
+        <h3>Sales</h3>
+        <div id="nsList" class="scroll">Loading…</div>
+      </div>
     </section>
 
     <!-- RECEIVING -->

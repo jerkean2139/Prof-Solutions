@@ -117,6 +117,17 @@ input:focus, select:focus { outline: 3px solid #bfe8d5; border-color: var(--bran
 .ff-badge.short { background: #fdecea; color: var(--danger); }
 .ff-badge.ok { background: #e7f6ee; color: var(--brand); }
 .ff-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+/* new sale SKU picker */
+.ns-skus { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+.ns-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+.ns-row:last-child { border-bottom: 0; }
+.ns-row input[type=checkbox] { width: 20px; height: 20px; min-height: 20px; flex: 0 0 auto; }
+.ns-row .ns-label { flex: 1 1 auto; }
+.ns-row .ns-label code { color: var(--brand); font-weight: 700; }
+.ns-row .ns-override { width: 96px; flex: 0 0 auto; }
+.chk { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 600; }
+.chk input { width: 20px; height: 20px; min-height: 20px; }
+
 .slip { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; }
 .slip .muted { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
 

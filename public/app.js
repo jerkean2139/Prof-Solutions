@@ -35,6 +35,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
     tab.classList.add('is-active');
     $('view-' + tab.dataset.view).classList.add('is-active');
     if (tab.dataset.view === 'portal') loadOrgs();
+    if (tab.dataset.view === 'sales') loadSalesAdmin();
     if (tab.dataset.view === 'receive') initReceiving();
     if (tab.dataset.view === 'fulfill') loadFulfillSales();
     if (tab.dataset.view === 'dashboard') loadDashboard();
@@ -772,6 +773,101 @@ async function payAction(id, action) {
 
 $('payStatus').addEventListener('change', () => loadPayouts());
 $('payReload').addEventListener('click', () => loadPayouts());
+
+// ---- sales admin ----
+// The front of the operational funnel: create a sale for a team, choose the
+// products it offers, and open it so Order entry can take orders. A new sale
+// locks to the active commission plan on the server (rule 3).
+async function loadSalesAdmin() {
+  try {
+    const [orgs, skus, sales] = await Promise.all([
+      api('/organizations'),
+      api('/skus'),
+      api('/sales'),
+    ]);
+    const orgSel = $('nsOrg');
+    orgSel.innerHTML = '';
+    if (!orgs.length) {
+      const o = document.createElement('option');
+      o.value = ''; o.textContent = 'No teams yet (onboard via GoHighLevel)';
+      orgSel.appendChild(o);
+    }
+    for (const o of orgs) {
+      const opt = document.createElement('option');
+      opt.value = o.id; opt.textContent = o.name;
+      orgSel.appendChild(opt);
+    }
+
+    $('nsSkus').innerHTML = skus.length
+      ? skus.map((s) => `<label class="ns-row">
+          <input type="checkbox" class="ns-check" data-sku="${s.sku_id ?? s.id}" />
+          <span class="ns-label"><code>${s.sku_code}</code> ${s.product_name || ''}</span>
+          <input type="text" class="ns-override" inputmode="decimal" placeholder="${Number(s.retail_price).toFixed(2)}" data-sku="${s.sku_id ?? s.id}" />
+        </label>`).join('')
+      : 'No SKUs. Add products in the Catalog tab first.';
+
+    renderSalesList(sales);
+  } catch (e) {
+    $('nsHint').textContent = e.message;
+    $('nsHint').className = 'hint err';
+  }
+}
+
+function renderSalesList(sales) {
+  const el = $('nsList');
+  if (!sales.length) { el.textContent = 'No sales yet.'; return; }
+  const head = '<tr><th>Team</th><th>Sale</th><th>Status</th><th></th></tr>';
+  const body = sales.map((s) => {
+    const action = s.status === 'draft'
+      ? `<button class="btn ns-open" data-id="${s.id}">Open</button>`
+      : '';
+    return `<tr><td>${s.organization_name || ''}</td><td>${s.name}</td><td>${s.status}</td><td>${action}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<table>${head}${body}</table>`;
+  el.querySelectorAll('.ns-open').forEach((b) =>
+    b.addEventListener('click', () => openSaleById(b.getAttribute('data-id'))));
+}
+
+async function openSaleById(id) {
+  try {
+    await api(`/sales/${id}/open`, { method: 'POST' });
+    toast('Sale opened');
+    loadSalesAdmin();
+    loadSales().catch(() => {}); // refresh the Order entry dropdown
+  } catch (e) { toast('Open failed: ' + e.message); }
+}
+
+async function createSale() {
+  const hint = $('nsHint');
+  const organizationId = $('nsOrg').value;
+  const name = $('nsName').value.trim();
+  if (!organizationId) { hint.textContent = 'Pick a team first'; hint.className = 'hint err'; return; }
+  if (!name) { hint.textContent = 'Sale name is required'; hint.className = 'hint err'; return; }
+  const checks = [...document.querySelectorAll('.ns-check')].filter((c) => c.checked);
+  if (!checks.length) { hint.textContent = 'Check at least one product'; hint.className = 'hint err'; return; }
+  const skusPayload = checks.map((c) => {
+    const skuId = c.getAttribute('data-sku');
+    const ov = document.querySelector(`.ns-override[data-sku="${skuId}"]`);
+    const priceOverride = ov && ov.value.trim();
+    return priceOverride ? { skuId, priceOverride } : { skuId };
+  });
+  const body = { organizationId, name, skus: skusPayload };
+  const goal = $('nsGoal').value.trim();
+  if (goal) body.goalAmount = goal;
+  try {
+    const sale = await api('/sales', { method: 'POST', body: JSON.stringify(body) });
+    if ($('nsOpen').checked) await api(`/sales/${sale.id}/open`, { method: 'POST' });
+    toast($('nsOpen').checked ? 'Sale created and opened' : 'Sale created (draft)');
+    hint.textContent = ''; hint.className = 'hint';
+    $('nsName').value = ''; $('nsGoal').value = '';
+    [...document.querySelectorAll('.ns-check')].forEach((c) => (c.checked = false));
+    [...document.querySelectorAll('.ns-override')].forEach((o) => (o.value = ''));
+    loadSalesAdmin();
+    loadSales().catch(() => {}); // an opened sale shows up in Order entry
+  } catch (e) { hint.textContent = e.message; hint.className = 'hint err'; }
+}
+
+$('nsCreate').addEventListener('click', createSale);
 
 // ---- catalog admin ----
 // Staff set up the products and SKUs the receiving screen scans against. The

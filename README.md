@@ -90,6 +90,9 @@ screen. Its views:
 - **Order entry** — keyboard-first paper/phone order capture: pick an open sale,
   type the SKU code and quantity, Enter to add, live running total, save and
   immediately start the next order.
+- **Sales** — start a sale for a team: choose the products it offers (with
+  optional per-SKU price overrides), create it, and open it so it appears in
+  Order entry. Lists sales with status and opens drafts.
 - **Receiving** — inbound stock: scan a QR/barcode with the phone camera (native
   `BarcodeDetector`, with a manual code fallback for browsers without it) or type
   the code, enter quantity, confirm. Writes a receipt to the ledger and shows the
