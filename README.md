@@ -74,22 +74,33 @@ npm test                  # vitest: migrations, DB guards, snapshot, seed, queue
 - `GET /me` — returns the auth context (mock identity until Clerk is enforced)
 - `POST /webhooks/accept-blue` — verifies the signature, then records payment refs
 - `POST /webhooks/ghl` — inbound store/contact events (online orders)
-- Operational JSON API: products, inventory (receive/adjust/on-hand), organizations
-  (with customer base), sales (create/open/finalize), orders, fulfillment
-  (pick list/pick/ship/packing slip), settlement + commissions, reports
-  (margin, leaderboard), vendors + purchase orders, forecasting + reorder.
+- Operational JSON API: products, inventory (receive/adjust/on-hand/warehouses),
+  organizations (with customer base), sales (create/open/finalize), orders,
+  fulfillment (pick list generate/read/pick/ship/packing slip), settlement +
+  commissions, reports (margin, leaderboard), vendors + purchase orders,
+  forecasting + reorder, and the owner dashboard summary.
+- Read-only ops agent (Phase 3): `GET /agent/schema` and `POST /agent/query`.
 
 ## The PWA
 
 An installable Progressive Web App is served by the same server at `/app` (no
 separate build or deploy). Open `/app/` in a browser or install it to the home
-screen. It has two views:
+screen. Its views:
 
 - **Order entry** — keyboard-first paper/phone order capture: pick an open sale,
   type the SKU code and quantity, Enter to add, live running total, save and
   immediately start the next order.
+- **Receiving** — inbound stock: scan a QR/barcode with the phone camera (native
+  `BarcodeDetector`, with a manual code fallback for browsers without it) or type
+  the code, enter quantity, confirm. Writes a receipt to the ledger and shows the
+  new on-hand. Built to beat the spreadsheet on speed.
+- **Fulfillment** — drives a sale end to end: finalize (with next-sale target and
+  incentive), generate the bulk pick list, pick each line, ship one delivery.
 - **Team portal** — order history, the team's customer base, the seller
   leaderboard, and the next-sale countdown.
+- **Dashboard** — the owner's read-only rollup: revenue, gross margin, units,
+  active teams, the sales pipeline, inventory health, reorder alerts, and top
+  sellers.
 
 The PWA calls the same-origin API. While Clerk enforcement is off it uses the
 mock identity; when enforcement flips on it will attach a Clerk session.
@@ -108,6 +119,27 @@ when it is `true`. To turn it on:
 
 The enforced path (missing token, invalid token, valid token) is covered by
 tests using an injected verifier, so no real keys are needed to verify the logic.
+
+## Read-only ops agent (Phase 3)
+
+The ops agent answers natural-language questions by running a single SELECT
+against the database. It never writes anything (rule 10), enforced in three
+layers so no one layer stands alone:
+
+1. A SQL guard rejects anything that is not one read-only SELECT/WITH, strips
+   comments, and blocks write/DDL keywords and dangerous functions.
+2. A dedicated `profsol_readonly` Postgres role holds SELECT and nothing else
+   (migration `0011`).
+3. Every query runs inside a `READ ONLY` transaction under that role, so the
+   database itself refuses any write even if the guard were bypassed.
+
+The piece that turns a question into SQL — the planner — is an injectable seam,
+exactly like the Clerk verifier. The whole pipeline (schema context, guard,
+read-only execution) is built and tested with an injected planner and no key.
+Wiring the default planner to a model needs `ANTHROPIC_API_KEY` plus a live
+verification pass; until then `POST /agent/query` reports that it is not
+configured rather than fabricating SQL. `GET /agent/schema` (metadata only,
+never data) works today.
 
 ## GoHighLevel integration
 
