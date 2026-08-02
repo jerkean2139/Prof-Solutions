@@ -101,6 +101,8 @@ screen. Its views:
 - **Dashboard** — the owner's read-only rollup: revenue, gross margin, units,
   active teams, the sales pipeline, inventory health, reorder alerts, and top
   sellers.
+- **Catalog** — set up the products and SKUs (with QR codes) the receiving
+  screen scans against. A SKU added here is immediately scannable in Receiving.
 - **Payouts** — the commission run: accrued to approved to paid, one action per
   row so the lifecycle is enforced in the UI as well as the API.
 

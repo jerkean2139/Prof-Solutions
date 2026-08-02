@@ -39,6 +39,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.view === 'fulfill') loadFulfillSales();
     if (tab.dataset.view === 'dashboard') loadDashboard();
     if (tab.dataset.view === 'payouts') loadPayouts();
+    if (tab.dataset.view === 'catalog') loadCatalog();
   });
 });
 
@@ -771,6 +772,79 @@ async function payAction(id, action) {
 
 $('payStatus').addEventListener('change', () => loadPayouts());
 $('payReload').addEventListener('click', () => loadPayouts());
+
+// ---- catalog admin ----
+// Staff set up the products and SKUs the receiving screen scans against. The
+// custom stack owns the catalog (not GHL), so this is the place to add one.
+async function loadCatalog() {
+  try {
+    const [products, skus] = await Promise.all([api('/products'), api('/skus')]);
+    // Product picker for the Add SKU form.
+    const sel = $('sProduct');
+    sel.innerHTML = '';
+    for (const p of products) {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = `${p.name} (${p.category})`;
+      sel.appendChild(o);
+    }
+    $('catProducts').innerHTML = products.length
+      ? tableHtml(['Name', 'Brand', 'Category'], products.map((p) => [p.name, p.brand, p.category]))
+      : 'No products yet.';
+    $('catSkus').innerHTML = skus.length
+      ? tableHtml(['Code', 'Product', 'QR', 'Price'],
+          skus.map((s) => [s.sku_code, s.product_name || '', s.qr_code || '—', usd(s.retail_price)]))
+      : 'No SKUs yet.';
+  } catch (e) {
+    $('catProducts').textContent = e.message;
+  }
+}
+
+async function addProduct() {
+  const hint = $('pHint');
+  const name = $('pName').value.trim();
+  const brand = $('pBrand').value.trim();
+  const ownerEntity = $('pOwner').value.trim();
+  if (!name || !brand || !ownerEntity) {
+    hint.textContent = 'Name, brand, and owner entity are required';
+    hint.className = 'hint err';
+    return;
+  }
+  try {
+    await api('/products', {
+      method: 'POST',
+      body: JSON.stringify({ name, brand, category: $('pCategory').value, ownerEntity }),
+    });
+    toast(`Added ${name}`);
+    hint.textContent = ''; hint.className = 'hint';
+    $('pName').value = ''; $('pBrand').value = '';
+    loadCatalog();
+  } catch (e) { hint.textContent = e.message; hint.className = 'hint err'; }
+}
+
+async function addSku() {
+  const hint = $('sHint');
+  const productId = $('sProduct').value;
+  const skuCode = $('sCode').value.trim();
+  if (!productId) { hint.textContent = 'Add a product first'; hint.className = 'hint err'; return; }
+  if (!skuCode) { hint.textContent = 'SKU code is required'; hint.className = 'hint err'; return; }
+  const body = { productId, skuCode };
+  const qr = $('sQr').value.trim(); if (qr) body.qrCode = qr;
+  const price = $('sPrice').value.trim(); if (price) body.retailPrice = price;
+  const cost = $('sCost').value.trim(); if (cost) body.productCost = cost;
+  const config = $('sConfig').value.trim(); if (config) body.unitConfig = config;
+  try {
+    await api('/skus', { method: 'POST', body: JSON.stringify(body) });
+    toast(`Added SKU ${skuCode}`);
+    hint.textContent = ''; hint.className = 'hint';
+    $('sCode').value = ''; $('sQr').value = ''; $('sPrice').value = ''; $('sCost').value = ''; $('sConfig').value = '';
+    loadCatalog();
+    // A new SKU is immediately scannable in Receiving; refresh its catalog too.
+    recv.loaded = false;
+  } catch (e) { hint.textContent = e.message; hint.className = 'hint err'; }
+}
+
+$('pAdd').addEventListener('click', addProduct);
+$('sAdd').addEventListener('click', addSku);
 
 // ---- boot ----
 loadSales().catch((e) => toast(e.message));

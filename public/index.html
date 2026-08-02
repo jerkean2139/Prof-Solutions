@@ -18,6 +18,7 @@
       <button class="tab" data-view="receive">Receiving</button>
       <button class="tab" data-view="fulfill">Fulfillment</button>
       <button class="tab" data-view="portal">Team portal</button>
+      <button class="tab" data-view="catalog">Catalog</button>
       <button class="tab" data-view="dashboard">Dashboard</button>
       <button class="tab" data-view="payouts">Payouts</button>
     </nav>
@@ -155,6 +156,56 @@
         </div>
       </div>
     </section>
+    <!-- CATALOG -->
+    <section id="view-catalog" class="view">
+      <div class="cards">
+        <div class="card">
+          <h3>Add product</h3>
+          <div class="row">
+            <label class="field grow"><span>Name</span><input id="pName" type="text" autocomplete="off" /></label>
+            <label class="field grow"><span>Brand</span><input id="pBrand" type="text" autocomplete="off" /></label>
+          </div>
+          <div class="row">
+            <label class="field"><span>Category</span>
+              <select id="pCategory">
+                <option value="detergent">Detergent</option>
+                <option value="candle">Candle</option>
+                <option value="topical">Topical</option>
+              </select>
+            </label>
+            <label class="field grow"><span>Owner entity</span>
+              <input id="pOwner" type="text" autocomplete="off" value="profitable_solutions" />
+            </label>
+            <button id="pAdd" class="btn primary">Add product</button>
+          </div>
+          <small id="pHint" class="hint"></small>
+        </div>
+
+        <div class="card">
+          <h3>Add SKU</h3>
+          <div class="row">
+            <label class="field grow"><span>Product</span><select id="sProduct"></select></label>
+          </div>
+          <div class="row">
+            <label class="field grow"><span>SKU code</span><input id="sCode" type="text" autocomplete="off" placeholder="e.g. CAN-3PK" /></label>
+            <label class="field grow"><span>QR code</span><input id="sQr" type="text" autocomplete="off" placeholder="e.g. QR-CAN-3PK" /></label>
+          </div>
+          <div class="row">
+            <label class="field"><span>Retail price</span><input id="sPrice" type="text" inputmode="decimal" placeholder="45.00" /></label>
+            <label class="field"><span>Unit cost</span><input id="sCost" type="text" inputmode="decimal" placeholder="14.00" /></label>
+            <label class="field grow"><span>Unit config</span><input id="sConfig" type="text" autocomplete="off" placeholder="3-pack" /></label>
+            <button id="sAdd" class="btn primary">Add SKU</button>
+          </div>
+          <small id="sHint" class="hint"></small>
+        </div>
+      </div>
+
+      <div class="cards">
+        <div class="card"><h3>Products</h3><div id="catProducts" class="scroll">Loading…</div></div>
+        <div class="card"><h3>SKUs</h3><div id="catSkus" class="scroll">Loading…</div></div>
+      </div>
+    </section>
+
     <!-- PAYOUTS -->
     <section id="view-payouts" class="view">
       <div class="row">
