@@ -684,7 +684,7 @@ function usd(str) {
 
 async function loadDashboard() {
   try {
-    const d = await api('/dashboard/summary');
+    const [d, inventory] = await Promise.all([api('/dashboard/summary'), api('/inventory')]);
     const h = d.headline;
     $('dashStats').innerHTML = [
       stat(usd(h.revenue), 'Revenue'),
@@ -715,6 +715,17 @@ async function loadDashboard() {
       ? tableHtml(['Seller', 'Units', 'Revenue'],
           d.top_sellers.map((s) => [s.display_name || s.seller_code, s.units, usd(s.revenue)]))
       : 'No seller credit yet.';
+
+    // Inventory on hand: negatives are a discrepancy, flag them in red.
+    $('dashInventory').innerHTML = inventory.length
+      ? tableHtml(['SKU', 'On hand', 'Committed', 'Available'],
+          inventory.map((i) => [
+            i.sku_code,
+            i.on_hand < 0 ? `<span style="color:var(--danger)">${i.on_hand}</span>` : i.on_hand,
+            i.committed,
+            i.available,
+          ]))
+      : 'No SKUs yet.';
   } catch (e) {
     $('dashStats').textContent = e.message;
   }
