@@ -18,6 +18,7 @@
       <button class="tab" data-view="receive">Receiving</button>
       <button class="tab" data-view="fulfill">Fulfillment</button>
       <button class="tab" data-view="portal">Team portal</button>
+      <button class="tab" data-view="dashboard">Dashboard</button>
     </nav>
   </header>
 
@@ -151,6 +152,20 @@
           <h3>Seller leaderboard</h3>
           <div id="leaderboard" class="scroll">Select a team.</div>
         </div>
+      </div>
+    </section>
+    <!-- OWNER DASHBOARD -->
+    <section id="view-dashboard" class="view">
+      <div class="row" style="justify-content:space-between">
+        <div class="brand" style="color:var(--ink);padding:0">Business at a glance</div>
+        <button id="dashReload" class="btn ghost" type="button">Reload</button>
+      </div>
+      <div id="dashStats" class="stats"></div>
+      <div class="cards">
+        <div class="card"><h3>Revenue by entity and channel</h3><div id="dashMargin" class="scroll">Loading…</div></div>
+        <div class="card"><h3>Sales pipeline</h3><div id="dashPipeline" class="scroll">Loading…</div></div>
+        <div class="card"><h3>Reorder alerts</h3><div id="dashReorder" class="scroll">Loading…</div></div>
+        <div class="card"><h3>Top sellers</h3><div id="dashSellers" class="scroll">Loading…</div></div>
       </div>
     </section>
   </main>

@@ -37,6 +37,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.view === 'portal') loadOrgs();
     if (tab.dataset.view === 'receive') initReceiving();
     if (tab.dataset.view === 'fulfill') loadFulfillSales();
+    if (tab.dataset.view === 'dashboard') loadDashboard();
   });
 });
 
@@ -602,6 +603,58 @@ async function renderPickArea(saleId, status) {
 
 $('fulfillSelect').addEventListener('change', (e) => renderFulfill(e.target.value));
 $('fulfillReload').addEventListener('click', () => loadFulfillSales());
+
+// ---- owner dashboard ----
+// One read-only call. The money strings from the server are shown as-is (never
+// re-parsed to a float); only whole-dollar display formatting is applied.
+function usd(str) {
+  const n = Number(str);
+  return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function loadDashboard() {
+  try {
+    const d = await api('/dashboard/summary');
+    const h = d.headline;
+    $('dashStats').innerHTML = [
+      stat(usd(h.revenue), 'Revenue'),
+      stat(usd(h.gross_margin), 'Gross margin'),
+      stat(h.units, 'Units sold'),
+      stat(h.order_count, 'Orders'),
+      stat(h.active_teams, 'Active teams'),
+      stat(d.inventory.on_hand_units, 'On-hand units'),
+      stat(d.inventory.reorder_alerts, 'Reorder alerts', Number(d.inventory.reorder_alerts) > 0),
+      stat(d.inventory.negative_lines, 'Negative stock', Number(d.inventory.negative_lines) > 0),
+    ].join('');
+
+    $('dashMargin').innerHTML = d.by_entity_channel.length
+      ? tableHtml(['Entity', 'Channel', 'Revenue', 'Margin'],
+          d.by_entity_channel.map((r) => [r.owner_entity, r.channel, usd(r.revenue), usd(r.gross_margin)]))
+      : 'No revenue yet.';
+
+    $('dashPipeline').innerHTML = d.pipeline.length
+      ? tableHtml(['Status', 'Sales'], d.pipeline.map((p) => [p.status, p.sales]))
+      : 'No sales yet.';
+
+    $('dashReorder').innerHTML = d.reorder_alerts.length
+      ? tableHtml(['SKU', 'Available', 'Reorder at', 'Suggest'],
+          d.reorder_alerts.map((r) => [r.sku_code, r.available, r.reorder_point, r.suggested_order]))
+      : 'Nothing to reorder. Run the forecast if this looks empty.';
+
+    $('dashSellers').innerHTML = d.top_sellers.length
+      ? tableHtml(['Seller', 'Units', 'Revenue'],
+          d.top_sellers.map((s) => [s.display_name || s.seller_code, s.units, usd(s.revenue)]))
+      : 'No seller credit yet.';
+  } catch (e) {
+    $('dashStats').textContent = e.message;
+  }
+}
+
+function stat(val, lbl, warn) {
+  return `<div class="stat${warn ? ' warn' : ''}"><div class="val">${val}</div><div class="lbl">${lbl}</div></div>`;
+}
+
+$('dashReload').addEventListener('click', () => loadDashboard());
 
 // ---- boot ----
 loadSales().catch((e) => toast(e.message));

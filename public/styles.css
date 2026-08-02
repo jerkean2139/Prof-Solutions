@@ -101,6 +101,13 @@ input:focus, select:focus { outline: 3px solid #bfe8d5; border-color: var(--bran
 .resolved strong { color: var(--brand); }
 .resolved .muted { color: var(--muted); font-size: 14px; }
 
+/* dashboard */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.stat .val { font-size: 24px; font-weight: 800; color: var(--brand); line-height: 1.1; }
+.stat .lbl { font-size: 12px; color: var(--muted); font-weight: 600; margin-top: 4px; text-transform: uppercase; letter-spacing: .02em; }
+.stat.warn .val { color: var(--danger); }
+
 /* fulfillment */
 .ff-step { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; }
 .ff-step h3 { margin: 0 0 8px; font-size: 15px; }
