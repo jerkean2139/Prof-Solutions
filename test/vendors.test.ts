@@ -6,6 +6,7 @@ import { getOnHand } from '../src/domain/inventory/service.js';
 import {
   createVendor,
   createPurchaseOrder,
+  listPurchaseOrders,
   getPurchaseOrder,
   receivePurchaseOrder,
 } from '../src/domain/vendors/service.js';
@@ -81,5 +82,14 @@ describe('purchase orders', () => {
     await expect(
       receivePurchaseOrder(poId, { receipts: [{ poLineId: lineId, quantity: 1 }], createdBy: null }),
     ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('lists purchase orders with the vendor name and total', async () => {
+    const list = await listPurchaseOrders();
+    const mine = list.find((p: { id: string }) => p.id === poId);
+    expect(mine).toBeDefined();
+    expect(mine.vendor_name).toBe('Acme Supply');
+    expect(mine.subtotal).toBe('1850.00');
+    expect(mine.status).toBe('received');
   });
 });

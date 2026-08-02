@@ -84,6 +84,18 @@ export async function createPurchaseOrder(input: CreatePoInput) {
   });
 }
 
+export async function listPurchaseOrders() {
+  const { rows } = await pool.query(
+    `SELECT po.id, po.po_number, po.status, po.subtotal, po.ordered_at,
+            v.name AS vendor_name
+       FROM purchase_orders po
+       JOIN vendors v ON v.id = po.vendor_id
+      WHERE po.deleted_at IS NULL
+      ORDER BY po.ordered_at DESC NULLS LAST, po.created_at DESC`,
+  );
+  return rows;
+}
+
 export async function getPurchaseOrder(id: string) {
   const po = await pool.query(
     `SELECT id, vendor_id, po_number, status, ordered_at, expected_at, subtotal FROM purchase_orders WHERE id=$1 AND deleted_at IS NULL`,

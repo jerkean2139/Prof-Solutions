@@ -20,6 +20,7 @@
       <button class="tab" data-view="fulfill">Fulfillment</button>
       <button class="tab" data-view="portal">Team portal</button>
       <button class="tab" data-view="catalog">Catalog</button>
+      <button class="tab" data-view="purchasing">Purchasing</button>
       <button class="tab" data-view="dashboard">Dashboard</button>
       <button class="tab" data-view="payouts">Payouts</button>
     </nav>
@@ -269,6 +270,54 @@
         <button id="expPayouts" class="btn ghost" type="button">Export CSV</button>
       </div>
       <div id="payList" class="scroll" style="max-height:none">Loading…</div>
+    </section>
+
+    <!-- PURCHASING -->
+    <section id="view-purchasing" class="view">
+      <div class="cards">
+        <div class="card">
+          <h3>Create purchase order</h3>
+          <div class="row">
+            <label class="field grow"><span>Vendor</span><select id="poVendor"></select></label>
+          </div>
+          <div class="row line-entry">
+            <label class="field grow"><span>SKU</span><select id="poSku"></select></label>
+            <label class="field qty"><span>Qty</span><input id="poQty" type="number" min="1" inputmode="numeric" value="1" /></label>
+            <label class="field qty"><span>Unit cost</span><input id="poCost" type="text" inputmode="decimal" placeholder="14.00" /></label>
+            <button id="poAddLine" class="btn">Add</button>
+          </div>
+          <table class="lines" id="poLinesTable" hidden>
+            <thead><tr><th>SKU</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Line</th><th></th></tr></thead>
+            <tbody id="poLinesBody"></tbody>
+          </table>
+          <div class="totalbar" style="position:static">
+            <div class="total" style="margin-left:auto">PO total: <strong id="poTotal">$0.00</strong></div>
+            <button id="poCreate" class="btn primary" disabled>Create PO</button>
+          </div>
+          <small id="poHint" class="hint"></small>
+        </div>
+
+        <div class="card">
+          <h3>Add vendor</h3>
+          <div class="row">
+            <label class="field grow"><span>Name</span><input id="vName" type="text" autocomplete="off" /></label>
+            <label class="field grow"><span>Contact</span><input id="vContact" type="text" autocomplete="off" placeholder="optional" /></label>
+          </div>
+          <div class="row">
+            <label class="field grow"><span>Payment terms</span><input id="vTerms" type="text" autocomplete="off" placeholder="e.g. Net 30" /></label>
+            <label class="field"><span>Lead days</span><input id="vLead" type="number" min="0" inputmode="numeric" placeholder="14" /></label>
+            <button id="vAdd" class="btn primary">Add vendor</button>
+          </div>
+          <small id="vHint" class="hint"></small>
+          <div id="vendorList" class="scroll" style="margin-top:10px">Loading…</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Purchase orders</h3>
+        <div id="poList" class="scroll" style="max-height:none">Loading…</div>
+        <div id="poDetail"></div>
+      </div>
     </section>
 
     <!-- OWNER DASHBOARD -->

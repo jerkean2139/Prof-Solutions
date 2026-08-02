@@ -8,6 +8,7 @@ import {
   createVendor,
   listVendors,
   createPurchaseOrder,
+  listPurchaseOrders,
   getPurchaseOrder,
   receivePurchaseOrder,
 } from './service.js';
@@ -64,6 +65,13 @@ export function vendorRoutes(): Router {
       if (!parsed.success) throw badRequest(parsed.error.issues[0]!.message);
       const createdBy = await resolveInternalUserId(req.auth);
       res.status(201).json(await createPurchaseOrder({ ...parsed.data, createdBy }));
+    }),
+  );
+
+  r.get(
+    '/purchase-orders',
+    asyncHandler(async (_req: Request, res: Response) => {
+      res.json(await listPurchaseOrders());
     }),
   );
 

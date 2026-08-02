@@ -64,6 +64,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.view === 'dashboard') loadDashboard();
     if (tab.dataset.view === 'payouts') loadPayouts();
     if (tab.dataset.view === 'catalog') loadCatalog();
+    if (tab.dataset.view === 'purchasing') loadPurchasing();
   });
 });
 
@@ -895,6 +896,181 @@ $('payReload').addEventListener('click', () => loadPayouts());
 $('expPayouts').addEventListener('click', () =>
   downloadCsv('payouts.csv', ['Payee', 'Type', 'Sale', 'Amount', 'Status'],
     payoutRows.map((c) => [c.payee_name || '', c.payee_type, c.campaign_name || '', c.amount, c.status])));
+
+// ---- purchasing (vendors + purchase orders) ----
+// Closes the inventory loop: order stock from a vendor, then receive it against
+// the PO. Receiving a PO writes receipts to the same append-only ledger as the
+// receiving screen, linked to the PO.
+const po = { skus: new Map(), lines: [] };
+
+async function loadPurchasing() {
+  try {
+    const [vendors, skus, pos] = await Promise.all([
+      api('/vendors'),
+      api('/skus'),
+      api('/purchase-orders'),
+    ]);
+    const vSel = $('poVendor');
+    vSel.innerHTML = '';
+    if (!vendors.length) {
+      const o = document.createElement('option');
+      o.value = ''; o.textContent = 'Add a vendor first';
+      vSel.appendChild(o);
+    }
+    for (const v of vendors) {
+      const o = document.createElement('option');
+      o.value = v.id; o.textContent = v.name;
+      vSel.appendChild(o);
+    }
+
+    const sSel = $('poSku');
+    sSel.innerHTML = '';
+    po.skus = new Map();
+    for (const s of skus) {
+      po.skus.set(s.id, s);
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = `${s.sku_code} — ${s.product_name || ''}`;
+      sSel.appendChild(o);
+    }
+
+    $('vendorList').innerHTML = vendors.length
+      ? tableHtml(['Vendor', 'Contact', 'Terms', 'Lead days'],
+          vendors.map((v) => [v.name, v.contact_name || '', v.payment_terms || '', v.lead_time_days ?? '']))
+      : 'No vendors yet.';
+
+    renderPoList(pos);
+  } catch (e) {
+    $('vendorList').textContent = e.message;
+  }
+}
+
+function renderPoLines() {
+  const body = $('poLinesBody');
+  body.innerHTML = '';
+  let totalCents = 0;
+  po.lines.forEach((l, i) => {
+    const lineCents = centsOf(l.unitCost) * l.quantityOrdered;
+    totalCents += lineCents;
+    const sku = po.skus.get(l.skuId);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><code>${sku ? sku.sku_code : l.skuId}</code></td>` +
+      `<td class="num">${l.quantityOrdered}</td><td class="num">${money(centsOf(l.unitCost))}</td>` +
+      `<td class="num">${money(lineCents)}</td>` +
+      `<td><button class="del" data-i="${i}" aria-label="Remove">×</button></td>`;
+    body.appendChild(tr);
+  });
+  $('poLinesTable').hidden = po.lines.length === 0;
+  $('poTotal').textContent = money(totalCents);
+  $('poCreate').disabled = po.lines.length === 0 || !$('poVendor').value;
+}
+
+function addPoLine() {
+  const skuId = $('poSku').value;
+  const qty = parseInt($('poQty').value, 10);
+  const cost = $('poCost').value.trim() || (po.skus.get(skuId) || {}).product_cost || '';
+  const hint = $('poHint');
+  if (!skuId) { hint.textContent = 'Pick a SKU'; hint.className = 'hint err'; return; }
+  if (!Number.isInteger(qty) || qty <= 0) { hint.textContent = 'Qty must be 1 or more'; hint.className = 'hint err'; return; }
+  if (!/^\d+(\.\d{1,2})?$/.test(cost)) { hint.textContent = 'Unit cost like 14.00'; hint.className = 'hint err'; return; }
+  po.lines.push({ skuId, quantityOrdered: qty, unitCost: cost });
+  hint.textContent = ''; hint.className = 'hint';
+  $('poQty').value = '1'; $('poCost').value = '';
+  renderPoLines();
+}
+
+async function createPo() {
+  const vendorId = $('poVendor').value;
+  if (!vendorId || !po.lines.length) return;
+  try {
+    const created = await api('/purchase-orders', {
+      method: 'POST',
+      body: JSON.stringify({ vendorId, lines: po.lines }),
+    });
+    toast(`Created ${created.po_number} — ${money(centsOf(created.subtotal))}`);
+    po.lines = [];
+    renderPoLines();
+    loadPurchasing();
+  } catch (e) { $('poHint').textContent = e.message; $('poHint').className = 'hint err'; }
+}
+
+async function addVendor() {
+  const name = $('vName').value.trim();
+  const hint = $('vHint');
+  if (!name) { hint.textContent = 'Vendor name is required'; hint.className = 'hint err'; return; }
+  const body = { name };
+  const contact = $('vContact').value.trim(); if (contact) body.contactName = contact;
+  const terms = $('vTerms').value.trim(); if (terms) body.paymentTerms = terms;
+  const lead = $('vLead').value.trim(); if (lead) body.leadTimeDays = parseInt(lead, 10);
+  try {
+    await api('/vendors', { method: 'POST', body: JSON.stringify(body) });
+    toast(`Added ${name}`);
+    hint.textContent = ''; hint.className = 'hint';
+    $('vName').value = ''; $('vContact').value = ''; $('vTerms').value = ''; $('vLead').value = '';
+    loadPurchasing();
+  } catch (e) { hint.textContent = e.message; hint.className = 'hint err'; }
+}
+
+function renderPoList(pos) {
+  const el = $('poList');
+  if (!pos.length) { el.textContent = 'No purchase orders yet.'; $('poDetail').innerHTML = ''; return; }
+  const head = '<tr><th>PO</th><th>Vendor</th><th>Status</th><th class="num">Total</th><th></th></tr>';
+  const body = pos.map((p) => `<tr>
+    <td><code>${p.po_number}</code></td><td>${p.vendor_name}</td><td>${p.status}</td>
+    <td class="num">${money(centsOf(p.subtotal))}</td>
+    <td><button class="btn po-open" data-id="${p.id}">Open</button></td>
+  </tr>`).join('');
+  el.innerHTML = `<table>${head}${body}</table>`;
+  el.querySelectorAll('.po-open').forEach((b) =>
+    b.addEventListener('click', () => showPoDetail(b.getAttribute('data-id'))));
+}
+
+async function showPoDetail(id) {
+  const area = $('poDetail');
+  area.innerHTML = 'Loading…';
+  try {
+    const p = await api(`/purchase-orders/${id}`);
+    const done = p.status === 'received' || p.status === 'cancelled';
+    const rows = p.lines.map((l) => {
+      const remaining = l.quantity_ordered - l.quantity_received;
+      return `<tr>
+        <td><code>${l.sku_code}</code></td>
+        <td class="num">${l.quantity_received}/${l.quantity_ordered}</td>
+        <td class="num">${money(centsOf(l.unit_cost))}</td>
+        <td>${(!done && remaining > 0)
+          ? `<input class="po-recv" data-line="${l.id}" type="number" min="0" max="${remaining}" value="${remaining}" style="width:80px" />`
+          : `<span class="ff-badge ok">done</span>`}</td>
+      </tr>`;
+    }).join('');
+    area.innerHTML = `<div class="ff-step"><h3>${p.po_number} <span class="ff-badge ${done ? 'ok' : ''}">${p.status}</span></h3>
+      <table class="lines"><thead><tr><th>SKU</th><th class="num">Received</th><th class="num">Cost</th><th>Receive now</th></tr></thead><tbody>${rows}</tbody></table>
+      ${done ? '' : `<div class="ff-actions"><button id="poReceive" class="btn primary">Receive entered quantities</button></div>`}
+      <small id="poRecvHint" class="hint"></small></div>`;
+    if ($('poReceive')) {
+      $('poReceive').addEventListener('click', async () => {
+        const receipts = [...area.querySelectorAll('.po-recv')]
+          .map((inp) => ({ poLineId: inp.getAttribute('data-line'), quantity: parseInt(inp.value, 10) }))
+          .filter((r) => Number.isInteger(r.quantity) && r.quantity > 0);
+        if (!receipts.length) { $('poRecvHint').textContent = 'Enter at least one quantity'; $('poRecvHint').className = 'hint err'; return; }
+        try {
+          await api(`/purchase-orders/${id}/receive`, { method: 'POST', body: JSON.stringify({ receipts }) });
+          toast('Received against ' + p.po_number);
+          showPoDetail(id);
+          loadPurchasing();
+        } catch (e) { $('poRecvHint').textContent = e.message; $('poRecvHint').className = 'hint err'; }
+      });
+    }
+  } catch (e) { area.textContent = e.message; }
+}
+
+$('poAddLine').addEventListener('click', addPoLine);
+$('poCreate').addEventListener('click', createPo);
+$('poVendor').addEventListener('change', renderPoLines);
+$('poLinesBody').addEventListener('click', (e) => {
+  const i = e.target.getAttribute && e.target.getAttribute('data-i');
+  if (i !== null && i !== undefined) { po.lines.splice(Number(i), 1); renderPoLines(); }
+});
+$('vAdd').addEventListener('click', addVendor);
 
 // ---- sales admin ----
 // The front of the operational funnel: create a sale for a team, choose the
