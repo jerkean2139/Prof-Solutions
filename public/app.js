@@ -722,7 +722,11 @@ function usd(str) {
 
 async function loadDashboard() {
   try {
-    const [d, inventory] = await Promise.all([api('/dashboard/summary'), api('/inventory')]);
+    const [d, inventory, customers] = await Promise.all([
+      api('/dashboard/summary'),
+      api('/inventory'),
+      api('/customers'),
+    ]);
     const h = d.headline;
     $('dashStats').innerHTML = [
       stat(usd(h.revenue), 'Revenue'),
@@ -733,6 +737,7 @@ async function loadDashboard() {
       stat(d.inventory.on_hand_units, 'On-hand units'),
       stat(d.inventory.reorder_alerts, 'Reorder alerts', Number(d.inventory.reorder_alerts) > 0),
       stat(d.inventory.negative_lines, 'Negative stock', Number(d.inventory.negative_lines) > 0),
+      stat(String(customers.length), 'Clients'),
     ].join('');
 
     $('dashMargin').innerHTML = d.by_entity_channel.length
@@ -764,6 +769,12 @@ async function loadDashboard() {
             i.available,
           ]))
       : 'No SKUs yet.';
+
+    // Master client list: every buyer across every team, deduped.
+    $('dashCustomers').innerHTML = customers.length
+      ? tableHtml(['Client', 'Teams', 'Last order'],
+          customers.map((c) => [c.display_name || '(no name)', c.teams, fmtDate(c.last_order_at)]))
+      : 'No clients yet.';
   } catch (e) {
     $('dashStats').textContent = e.message;
   }
