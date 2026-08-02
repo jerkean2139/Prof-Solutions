@@ -6,7 +6,7 @@ import { ensureMigrated, wipeDomain } from './helpers.js';
 import { registerTeam } from '../src/domain/organizations/service.js';
 import { createProduct, createSku } from '../src/domain/products/service.js';
 import { createSale, openSale } from '../src/domain/sales/service.js';
-import { listOrders } from '../src/domain/orders/service.js';
+import { listOrders, getOrderByNumber } from '../src/domain/orders/service.js';
 
 // The most business-critical integration: a buyer orders on the GoHighLevel
 // store, which posts order.created to /webhooks/ghl, and the custom stack turns
@@ -85,6 +85,20 @@ describe('GHL online-order webhook', () => {
     const mine = orders.find((o: { id: string }) => o.id === body.orderId);
     expect(mine).toBeDefined();
     expect(mine.entry_channel).toBe('online');
+  });
+
+  it('looks up an order by its number with enriched detail', async () => {
+    const orders = await listOrders(saleId);
+    const num = orders[0]!.order_number as string;
+    const found = await getOrderByNumber(num);
+    expect(found.order_number).toBe(num);
+    expect(found.sale_name).toBe('Sale');
+    expect(found.lines.length).toBeGreaterThan(0);
+    expect(found.lines[0].sku_code).toBe('CAN');
+  });
+
+  it('404s an unknown order number', async () => {
+    await expect(getOrderByNumber('ORD-NOPE')).rejects.toMatchObject({ status: 404 });
   });
 
   it('rejects a malformed order.created with a 400', async () => {

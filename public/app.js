@@ -255,6 +255,30 @@ async function refreshPortal(orgId) {
   } catch (e) { $('orderHistory').textContent = e.message; }
 }
 
+// Look up any order by its number -- the customer-service question "where's
+// order X?". Global, not team-scoped.
+async function findOrder() {
+  const num = $('findOrderNum').value.trim();
+  const out = $('findOrderResult');
+  if (!num) { out.innerHTML = ''; return; }
+  out.innerHTML = 'Looking…';
+  try {
+    const o = await api(`/orders/by-number/${encodeURIComponent(num)}`);
+    const who = [o.buyer_name, o.seller_name ? `via ${o.seller_name}` : ''].filter(Boolean).join(' ');
+    out.innerHTML = `<div style="margin-top:10px">
+      <div><strong>${o.order_number}</strong> — ${o.sale_name} <span class="ff-badge ok">${o.status}</span></div>
+      <div class="muted" style="color:var(--muted);font-size:14px;margin:4px 0">${who || '(no buyer on file)'} · ${o.entry_channel} · ${fmtDate(o.created_at)}</div>
+      ${tableHtml(['Code', 'Product', 'Qty', 'Price', 'Line'],
+        o.lines.map((l) => [l.sku_code, l.product_name || '', l.quantity, money(centsOf(l.unit_price)), money(centsOf(l.extended))]))}
+      <div style="text-align:right;margin-top:6px"><strong>Total ${money(centsOf(o.subtotal))}</strong></div>
+    </div>`;
+  } catch (e) {
+    out.innerHTML = `<div class="hint err" style="margin-top:8px">${e.message}</div>`;
+  }
+}
+$('findOrderBtn').addEventListener('click', findOrder);
+$('findOrderNum').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); findOrder(); } });
+
 function renderCountdown(target) {
   const el = $('countdown');
   if (!target) { el.hidden = true; return; }

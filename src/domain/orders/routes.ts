@@ -4,7 +4,7 @@ import { asyncHandler } from '../../http/asyncHandler.js';
 import { requireAuth } from '../../auth/clerk.js';
 import { resolveInternalUserId } from '../../auth/user.js';
 import { badRequest } from '../../http/errors.js';
-import { createOrder, getOrder, listOrders } from './service.js';
+import { createOrder, getOrder, getOrderByNumber, listOrders } from './service.js';
 
 const money = z.string().regex(/^\d+(\.\d{1,2})?$/, 'must be a decimal like 135.00');
 
@@ -45,6 +45,15 @@ export function orderRoutes(): Router {
       if (!parsed.success) throw badRequest(parsed.error.issues[0]!.message);
       const createdBy = await resolveInternalUserId(req.auth);
       res.status(201).json(await createOrder({ ...parsed.data, createdBy }));
+    }),
+  );
+
+  // Lookup by the human order number. Registered before /orders/:id so the
+  // literal "by-number" segment is not read as an id.
+  r.get(
+    '/orders/by-number/:number',
+    asyncHandler(async (req: Request, res: Response) => {
+      res.json(await getOrderByNumber(req.params.number as string));
     }),
   );
 

@@ -189,6 +189,34 @@ export async function getOrder(id: string) {
   return { ...order.rows[0], lines: lines.rows };
 }
 
+// Look up one order by its number, the way a customer or a staff member refers
+// to it. Enriched with the sale, buyer, seller, and readable line items so the
+// answer to "where's order X?" is complete in one call.
+export async function getOrderByNumber(orderNumber: string) {
+  const order = await pool.query(
+    `SELECT o.id, o.campaign_id, c.name AS sale_name, o.order_number, o.entry_channel,
+            o.subtotal, o.status, o.created_at,
+            cust.display_name AS buyer_name,
+            sel.display_name AS seller_name, sel.seller_code
+       FROM orders o
+       JOIN campaigns c ON c.id = o.campaign_id
+       LEFT JOIN customers cust ON cust.id = o.customer_id
+       LEFT JOIN sellers sel ON sel.id = o.seller_id
+      WHERE o.order_number = $1 AND o.deleted_at IS NULL`,
+    [orderNumber],
+  );
+  if (order.rowCount === 0) throw notFound(`order ${orderNumber} not found`);
+  const lines = await pool.query(
+    `SELECT ol.sku_id, s.sku_code, p.name AS product_name, ol.quantity, ol.unit_price, ol.extended
+       FROM order_lines ol
+       JOIN skus s ON s.id = ol.sku_id
+       JOIN products p ON p.id = s.product_id
+      WHERE ol.order_id = $1 ORDER BY s.sku_code`,
+    [order.rows[0]!.id],
+  );
+  return { ...order.rows[0], lines: lines.rows };
+}
+
 export async function listOrders(campaignId: string) {
   if (!campaignId) throw badRequest('campaignId is required');
   const { rows } = await pool.query(
