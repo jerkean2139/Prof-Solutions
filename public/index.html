@@ -142,6 +142,19 @@
       </table>
 
       <details class="ref">
+        <summary>Adjust / correct a count</summary>
+        <div class="row" style="margin-top:12px">
+          <label class="field grow"><span>Code (scan or type)</span><input id="adjCode" type="text" autocomplete="off" placeholder="SKU or QR code" /></label>
+          <label class="field qty"><span>Change</span><input id="adjDelta" type="number" inputmode="numeric" placeholder="-3" /></label>
+        </div>
+        <div class="row">
+          <label class="field grow"><span>Reason (required)</span><input id="adjReason" type="text" autocomplete="off" placeholder="e.g. damaged in transit, recount" /></label>
+          <button id="adjBtn" class="btn">Adjust</button>
+        </div>
+        <small id="adjHint" class="hint"></small>
+      </details>
+
+      <details class="ref">
         <summary>Catalog</summary>
         <div id="recvRef" class="ref-list"></div>
       </details>

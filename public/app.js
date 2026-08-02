@@ -435,6 +435,44 @@ function stopScan() {
 $('scanBtn').addEventListener('click', startScan);
 $('scanStop').addEventListener('click', stopScan);
 
+// Stock correction: a signed adjustment with a required reason. It never edits
+// history -- the server writes a new offsetting ledger row (rule 1).
+async function adjustStockUi() {
+  const hint = $('adjHint');
+  const sku = recvLookup($('adjCode').value);
+  if (!sku) {
+    hint.textContent = `Unknown code "${$('adjCode').value.trim()}"`;
+    hint.className = 'hint err';
+    return;
+  }
+  const delta = parseInt($('adjDelta').value, 10);
+  if (!Number.isInteger(delta) || delta === 0) {
+    hint.textContent = 'Change must be a non-zero number (use - to subtract)';
+    hint.className = 'hint err';
+    return;
+  }
+  const reason = $('adjReason').value.trim();
+  if (!reason) { hint.textContent = 'A reason is required for a correction'; hint.className = 'hint err'; return; }
+  const warehouseId = $('whSelect').value;
+  if (!warehouseId) { hint.textContent = 'No warehouse selected'; hint.className = 'hint err'; return; }
+  try {
+    await api('/inventory/adjust', {
+      method: 'POST',
+      body: JSON.stringify({ skuId: sku.sku_id ?? sku.id, warehouseId, delta, reason }),
+    });
+    let onHand = '';
+    try {
+      const snaps = await api(`/inventory/on-hand/${sku.sku_id ?? sku.id}`);
+      const s = snaps.find((x) => x.warehouse_id === warehouseId) || snaps[0];
+      onHand = s ? ` (on hand ${s.quantity_on_hand})` : '';
+    } catch { /* best effort */ }
+    toast(`Adjusted ${sku.sku_code} by ${delta > 0 ? '+' : ''}${delta}${onHand}`);
+    hint.textContent = ''; hint.className = 'hint';
+    $('adjCode').value = ''; $('adjDelta').value = ''; $('adjReason').value = '';
+  } catch (e) { hint.textContent = e.message; hint.className = 'hint err'; }
+}
+$('adjBtn').addEventListener('click', adjustStockUi);
+
 // ---- fulfillment ----
 // Drives a finalized-and-shipped sale end to end: finalize -> pick list ->
 // pick each line -> ship. Every button maps to one existing API call. State is
