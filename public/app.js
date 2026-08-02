@@ -1170,9 +1170,12 @@ $('nsCreate').addEventListener('click', createSale);
 // ---- catalog admin ----
 // Staff set up the products and SKUs the receiving screen scans against. The
 // custom stack owns the catalog (not GHL), so this is the place to add one.
+const catalog = { skus: [] };
+
 async function loadCatalog() {
   try {
     const [products, skus] = await Promise.all([api('/products'), api('/skus')]);
+    catalog.skus = skus;
     // Product picker for the Add SKU form.
     const sel = $('sProduct');
     sel.innerHTML = '';
@@ -1239,6 +1242,53 @@ async function addSku() {
 
 $('pAdd').addEventListener('click', addProduct);
 $('sAdd').addEventListener('click', addSku);
+
+// Print a sheet of scannable QR labels, one per SKU. Each label encodes the
+// SKU's qr_code (falling back to its sku_code), which is exactly what the
+// receiving scanner resolves. The QR is generated locally -- no internet, no
+// external service -- and opened in a print window.
+function printLabels() {
+  if (!window.QR) { toast('QR generator not loaded'); return; }
+  const skus = catalog.skus.filter((s) => s.qr_code || s.sku_code);
+  if (!skus.length) { toast('No SKUs to print'); return; }
+  const labels = skus.map((s) => {
+    const value = s.qr_code || s.sku_code;
+    let svg = '';
+    try {
+      svg = window.QR.toSvg(window.QR.make(value), { scale: 6, border: 2 });
+    } catch (e) {
+      svg = `<div class="qr-err">${e.message}</div>`;
+    }
+    return `<div class="label">
+      <div class="qr">${svg}</div>
+      <div class="code">${s.sku_code}</div>
+      <div class="name">${s.product_name || ''}</div>
+    </div>`;
+  }).join('');
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><title>SKU labels</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 14px -apple-system, Segoe UI, Roboto, sans-serif; }
+      .sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.1in, 1fr)); gap: 0.15in; padding: 0.25in; }
+      .label { border: 1px solid #ccc; border-radius: 6px; padding: 0.12in; text-align: center; break-inside: avoid; }
+      .label .qr svg { width: 1.4in; height: 1.4in; }
+      .label .code { font-family: ui-monospace, Menlo, monospace; font-weight: 700; font-size: 15px; margin-top: 4px; }
+      .label .name { color: #555; font-size: 12px; }
+      .qr-err { color: #c0392b; font-size: 11px; }
+      @media print { .toolbar { display: none; } .label { border-color: #999; } }
+      .toolbar { padding: 10px 16px; background: #0b8a55; color: #fff; display: flex; gap: 12px; align-items: center; }
+      .toolbar button { font: inherit; padding: 8px 14px; border: 0; border-radius: 8px; cursor: pointer; }
+    </style></head>
+    <body>
+      <div class="toolbar"><strong>${skus.length} SKU labels</strong><button onclick="window.print()">Print</button></div>
+      <div class="sheet">${labels}</div>
+    </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) { toast('Allow pop-ups to print labels'); return; }
+  w.document.write(doc);
+  w.document.close();
+}
+$('printLabels').addEventListener('click', printLabels);
 
 // ---- boot ----
 loadSales().catch((e) => toast(e.message));
