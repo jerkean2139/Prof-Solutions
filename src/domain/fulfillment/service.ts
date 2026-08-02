@@ -100,6 +100,61 @@ export async function generatePickList(saleId: string, createdBy: string | null)
   return result;
 }
 
+// Read the current (latest, not cancelled) pick list for a sale, with live
+// on-hand and shortage per line. Same shape as generatePickList's return, so the
+// picking screen renders identically whether it just generated or is reloading.
+export async function getPickListForSale(saleId: string) {
+  const pl = await pool.query<{ id: string; pick_list_number: string; status: string }>(
+    `SELECT id, pick_list_number, status
+       FROM pick_lists
+      WHERE campaign_id=$1 AND deleted_at IS NULL AND status <> 'cancelled'
+      ORDER BY created_at DESC LIMIT 1`,
+    [saleId],
+  );
+  if (pl.rowCount === 0) return null;
+  const pickListId = pl.rows[0]!.id;
+
+  const lineRows = await pool.query<{
+    id: string;
+    sku_id: string;
+    sku_code: string;
+    quantity_required: number;
+    quantity_picked: number;
+    on_hand: string;
+  }>(
+    `SELECT pll.id, pll.sku_id, s.sku_code, pll.quantity_required, pll.quantity_picked,
+            COALESCE((SELECT SUM(quantity_on_hand) FROM inventory_snapshots WHERE sku_id = pll.sku_id), 0) AS on_hand
+       FROM pick_list_lines pll JOIN skus s ON s.id = pll.sku_id
+      WHERE pll.pick_list_id=$1 AND pll.deleted_at IS NULL
+      ORDER BY s.sku_code`,
+    [pickListId],
+  );
+
+  const lines: PickListLineView[] = lineRows.rows.map((row) => {
+    const onHand = Number(row.on_hand);
+    const remaining = Math.max(0, row.quantity_required - row.quantity_picked);
+    const shortage = Math.max(0, remaining - onHand);
+    return {
+      id: row.id,
+      sku_id: row.sku_id,
+      sku_code: row.sku_code,
+      quantity_required: row.quantity_required,
+      quantity_picked: row.quantity_picked,
+      quantity_on_hand: onHand,
+      short: shortage > 0,
+      shortage,
+    };
+  });
+
+  return {
+    pick_list_id: pickListId,
+    pick_list_number: pl.rows[0]!.pick_list_number,
+    status: pl.rows[0]!.status,
+    short: lines.some((l) => l.short),
+    lines,
+  };
+}
+
 // Resolve which warehouse a pick draws from. The UI assumes one warehouse; the
 // schema supports many. Prefer the SKU's primary (most on-hand), else the sole
 // active warehouse.

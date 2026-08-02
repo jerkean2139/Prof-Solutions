@@ -11,6 +11,9 @@
   --radius: 12px;
 }
 * { box-sizing: border-box; }
+/* The HTML hidden attribute must win over author display rules (e.g. the
+   flex scan box), or toggling .hidden in JS silently does nothing. */
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -89,6 +92,22 @@ input:focus, select:focus { outline: 3px solid #bfe8d5; border-color: var(--bran
 .scroll .num { text-align: right; }
 
 .countdown { background: #0b8a55; color: #fff; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; font-weight: 600; }
+
+/* receiving */
+.scanbox { background: #000; border-radius: var(--radius); padding: 10px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.scanbox video { width: 100%; max-width: 480px; border-radius: 8px; background: #000; aspect-ratio: 4/3; object-fit: cover; }
+.scanbox .hint { color: #d8f3e6; }
+.resolved { background: var(--card); border: 1px solid var(--brand); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px; }
+.resolved strong { color: var(--brand); }
+.resolved .muted { color: var(--muted); font-size: 14px; }
+
+/* fulfillment */
+.ff-step { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; }
+.ff-step h3 { margin: 0 0 8px; font-size: 15px; }
+.ff-badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #eef3f0; color: var(--muted); }
+.ff-badge.short { background: #fdecea; color: var(--danger); }
+.ff-badge.ok { background: #e7f6ee; color: var(--brand); }
+.ff-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);

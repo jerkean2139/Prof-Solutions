@@ -80,10 +80,13 @@ export async function createSku(input: CreateSkuInput) {
 
 export async function listSkus() {
   const { rows } = await pool.query(
-    `SELECT id, product_id, sku_code, description, unit_config, retail_price, product_cost, barcode, qr_code, active
-       FROM skus
-      WHERE deleted_at IS NULL
-      ORDER BY sku_code`,
+    `SELECT s.id, s.product_id, s.sku_code, p.name AS product_name,
+            s.description, s.unit_config, s.retail_price, s.product_cost,
+            s.barcode, s.qr_code, s.active
+       FROM skus s
+       JOIN products p ON p.id = s.product_id
+      WHERE s.deleted_at IS NULL
+      ORDER BY s.sku_code`,
   );
   return rows;
 }

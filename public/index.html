@@ -15,6 +15,8 @@
     <div class="brand">Profitable Solutions</div>
     <nav class="tabs">
       <button class="tab is-active" data-view="entry">Order entry</button>
+      <button class="tab" data-view="receive">Receiving</button>
+      <button class="tab" data-view="fulfill">Fulfillment</button>
       <button class="tab" data-view="portal">Team portal</button>
     </nav>
   </header>
@@ -71,6 +73,60 @@
       </details>
 
       <div id="toast" class="toast" hidden></div>
+    </section>
+
+    <!-- RECEIVING -->
+    <section id="view-receive" class="view">
+      <div class="row">
+        <label class="field grow">
+          <span>Warehouse</span>
+          <select id="whSelect" autocomplete="off"></select>
+        </label>
+        <button id="scanBtn" class="btn ghost" type="button">Scan a code</button>
+      </div>
+
+      <div id="scanBox" class="scanbox" hidden>
+        <video id="scanVideo" playsinline muted></video>
+        <button id="scanStop" class="btn ghost" type="button">Stop camera</button>
+        <small id="scanNote" class="hint"></small>
+      </div>
+
+      <div class="row line-entry">
+        <label class="field grow">
+          <span>Code (scan or type)</span>
+          <input id="recvCode" type="text" autocomplete="off" placeholder="SKU or QR code, Enter" />
+          <small id="recvHint" class="hint"></small>
+        </label>
+        <label class="field qty">
+          <span>Qty</span>
+          <input id="recvQty" type="number" min="1" inputmode="numeric" value="1" />
+        </label>
+        <button id="recvAdd" class="btn primary">Receive</button>
+      </div>
+
+      <div id="recvResolved" class="resolved" hidden></div>
+
+      <table class="lines" id="recvTable" hidden>
+        <thead><tr><th>Time</th><th>Code</th><th>Product</th><th class="num">Qty in</th><th class="num">On hand</th></tr></thead>
+        <tbody id="recvBody"></tbody>
+      </table>
+
+      <details class="ref">
+        <summary>Catalog</summary>
+        <div id="recvRef" class="ref-list"></div>
+      </details>
+    </section>
+
+    <!-- FULFILLMENT -->
+    <section id="view-fulfill" class="view">
+      <div class="row">
+        <label class="field grow">
+          <span>Sale</span>
+          <select id="fulfillSelect" autocomplete="off"></select>
+        </label>
+        <button id="fulfillReload" class="btn ghost" type="button">Reload</button>
+      </div>
+      <div id="fulfillPanel" class="scroll" style="max-height:none">Pick a sale to begin.</div>
     </section>
 
     <!-- TEAM PORTAL -->

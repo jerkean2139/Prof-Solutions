@@ -6,6 +6,7 @@ import { resolveInternalUserId } from '../../auth/user.js';
 import { badRequest } from '../../http/errors.js';
 import {
   generatePickList,
+  getPickListForSale,
   pickLine,
   completePickList,
   createShipment,
@@ -33,6 +34,15 @@ export function fulfillmentRoutes(): Router {
     asyncHandler(async (req: Request, res: Response) => {
       const createdBy = await resolveInternalUserId(req.auth);
       res.status(201).json(await generatePickList(req.params.id as string, createdBy));
+    }),
+  );
+
+  // Read the current pick list for a sale (so the picking screen survives a
+  // reload). Returns null when none has been generated yet.
+  r.get(
+    '/sales/:id/pick-list',
+    asyncHandler(async (req: Request, res: Response) => {
+      res.json(await getPickListForSale(req.params.id as string));
     }),
   );
 

@@ -107,6 +107,19 @@ export async function adjustStock(input: AdjustInput) {
   return rows[0];
 }
 
+// Active warehouses, for the receiving screen to target. The UI assumes one
+// warehouse; the schema supports many, so this returns all active ones and the
+// screen defaults to the first.
+export async function listWarehouses() {
+  const { rows } = await pool.query(
+    `SELECT id, name, address_city, address_state, active
+       FROM warehouses
+      WHERE active = true AND deleted_at IS NULL
+      ORDER BY name`,
+  );
+  return rows;
+}
+
 // On-hand read comes from the snapshot cache. Reports that answer "can we
 // fulfill this" must use available (on_hand minus committed), which the snapshot
 // exposes as a generated column.
