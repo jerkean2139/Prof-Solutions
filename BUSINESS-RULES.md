@@ -141,6 +141,16 @@ Triggered from a `finalized` sale.
 
 The team gets one bulk delivery. Individual buyer separation happens on their end, not ours. Do not build per-buyer boxes.
 
+## Completing and shipping a pick list
+
+Completing a pick list is the gate to shipping: shipping flips the sale to `delivered` and pushes a tracking number to GHL, which tells the team their delivery is on the way. Since completing a pick line is the only path that writes the ledger, these have to hold:
+
+1. **A pick list with nothing picked cannot be completed.** Shipping an empty delivery is always an error, never an intentional short ship.
+2. **A partially picked list cannot be completed by accident.** Shipping less than the sale called for is allowed, but it has to be stated explicitly (`allowShort`), not inferred from whatever happened to be picked.
+3. **Only a completed pick list can ship.** Otherwise shipping is a way around rules 1 and 2, and the team gets a tracking number for stock still sitting on the shelf.
+
+Short shipping stays permitted on purpose — it is the counterpart to marking a generated list short, and a business coming off paper will sometimes ship what it has. The rule is that it must be a decision someone made, not a silent default.
+
 ---
 
 ## Growth loop (Phase 2 messaging, wired in Phase 1)

@@ -19,6 +19,12 @@ const pickSchema = z.object({
   warehouseId: z.string().uuid().optional(),
 });
 
+// Shipping short is a deliberate act, so it is stated at the boundary rather
+// than inferred from whatever happened to be picked.
+const completeSchema = z.object({
+  allowShort: z.boolean().optional(),
+});
+
 const shipSchema = z.object({
   carrier: z.string().optional(),
   trackingNumber: z.string().optional(),
@@ -60,7 +66,9 @@ export function fulfillmentRoutes(): Router {
   r.post(
     '/pick-lists/:id/complete',
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await completePickList(req.params.id as string));
+      const parsed = completeSchema.safeParse(req.body ?? {});
+      if (!parsed.success) throw badRequest(parsed.error.issues[0]!.message);
+      res.json(await completePickList(req.params.id as string, parsed.data));
     }),
   );
 

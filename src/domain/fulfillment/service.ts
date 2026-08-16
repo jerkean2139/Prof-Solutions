@@ -232,12 +232,47 @@ export async function pickLine(pickListLineId: string, input: PickLineInput) {
   return { pickListLineId, sku_id: skuId, warehouse_id: warehouseId, quantity_on_hand: snap.rows[0]?.quantity_on_hand ?? null };
 }
 
-export async function completePickList(pickListId: string) {
+export interface CompletePickListInput {
+  // A deliberate short ship: send what was actually picked and accept that the
+  // team gets less than the sale called for. Never a way to ship nothing.
+  allowShort?: boolean;
+}
+
+// Completing a pick list is what makes a sale shippable, so it must not be
+// possible to complete one nobody picked. Picking is the only path that writes
+// the ledger, so "nothing picked" means "nothing moved" — completing anyway
+// would mark the sale delivered and push tracking to GHL while the stock is
+// still on the shelf.
+export async function completePickList(
+  pickListId: string,
+  input: CompletePickListInput = {},
+) {
   const pl = await pool.query<{ status: string }>(`SELECT status FROM pick_lists WHERE id=$1`, [
     pickListId,
   ]);
   if (pl.rowCount === 0) throw notFound(`pick list ${pickListId} not found`);
   if (pl.rows[0]!.status === 'cancelled') throw conflict('pick list is cancelled');
+
+  const totals = await pool.query<{ required: string; picked: string }>(
+    `SELECT COALESCE(SUM(quantity_required), 0) AS required,
+            COALESCE(SUM(quantity_picked), 0) AS picked
+       FROM pick_list_lines WHERE pick_list_id=$1 AND deleted_at IS NULL`,
+    [pickListId],
+  );
+  const required = Number(totals.rows[0]!.required);
+  const picked = Number(totals.rows[0]!.picked);
+
+  // Shipping an empty box is always an error, never a deliberate short ship,
+  // so allowShort does not open this door.
+  if (required > 0 && picked === 0) {
+    throw conflict('cannot complete a pick list with nothing picked; pick the lines first');
+  }
+  if (picked < required && !input.allowShort) {
+    throw conflict(
+      `pick list is short: ${picked} of ${required} picked. Pick the rest, or complete with allowShort to ship it short.`,
+    );
+  }
+
   const { rows } = await pool.query(
     `UPDATE pick_lists SET status='complete', completed_at=now() WHERE id=$1 RETURNING id, status, completed_at`,
     [pickListId],
@@ -264,6 +299,12 @@ export async function createShipment(pickListId: string, input: ShipmentInput) {
   const sStatus = await saleStatus(saleId);
   if (sStatus !== 'picking') {
     throw conflict(`can only ship from a sale that is picking (sale is ${sStatus})`);
+  }
+  // Completing is where the picked-versus-required check lives, so shipping has
+  // to go through it. Without this, ship is a way around that check and the
+  // team gets a tracking number for stock still sitting on the shelf.
+  if (pl.rows[0]!.status !== 'complete') {
+    throw conflict(`can only ship a completed pick list (pick list is ${pl.rows[0]!.status})`);
   }
 
   // SKUs to refresh once the sale leaves the committed set.
