@@ -14,6 +14,7 @@ Start with the docs, in this order:
 - `SCHEMA.md` — the data model
 - `BUILD-PLAN.md` — phases and what "done" means for each
 - `RUNBOOK.md` — how to run, deploy, smoke-test, and turn on the key-gated pieces
+- `GHL-GO-LIVE.md` — the seven-step checklist for wiring GoHighLevel, verified by `npm run ghl:preflight`
 
 ## Stack
 

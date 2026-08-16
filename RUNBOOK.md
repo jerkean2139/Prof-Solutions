@@ -135,11 +135,28 @@ a request without a valid Clerk token gets a 401.
 
 ## Turning on GoHighLevel
 
-Follow `GHL-SETUP.md` end to end. In short: create the custom fields it lists,
-put their IDs in `GHL_CUSTOM_FIELD_IDS`, set `GHL_API_KEY` and
+Follow `GHL-GO-LIVE.md`: seven steps, about thirty minutes, with `GHL-SETUP.md`
+as the long form when a step needs more detail. In short: create the custom
+fields it lists, put their IDs in `GHL_CUSTOM_FIELD_IDS`, set `GHL_API_KEY` and
 `GHL_LOCATION_ID`, and run the worker (`npm run start:worker`). Without
 `GHL_API_KEY` the worker logs what it would send and skips, so nothing breaks
 before you are ready.
+
+Before trusting it with a real team, prove the wiring:
+
+```bash
+npm run ghl:preflight
+```
+
+It verifies the token authenticates, the location resolves, every custom field
+ID exists in that location, and no two logical names point at the same ID. It
+only reads, never writes, and never prints the token. A wrong field ID is
+otherwise silent — the app skips an unmapped field with a warning rather than
+guessing — so this is the difference between finding out now and finding out on
+a real team's finalize.
+
+What it cannot check: whether a workflow is listening for each trigger tag.
+GHL creates a tag when it is applied, so that part is eyes-on (step 7).
 
 ## The read-only ops question box (Phase 3)
 

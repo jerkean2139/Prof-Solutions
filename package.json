@@ -17,6 +17,7 @@
     "migrate:reset": "tsx src/db/migrate.ts reset",
     "seed": "tsx src/seed/seed.ts",
     "snapshot:rebuild": "tsx src/inventory/rebuild.ts",
+    "ghl:preflight": "tsx scripts/ghl-preflight.ts",
     "dev": "tsx watch src/http/server.ts",
     "worker": "tsx src/worker.ts",
     "start": "node dist/http/server.js",
