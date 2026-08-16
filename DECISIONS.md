@@ -2,6 +2,20 @@
 
 Confirmed decisions, with the reasoning, so nobody re-litigates them from memory. Dated newest first. If a decision changes, add a new entry, do not edit the old one.
 
+## 2026-08-16: GoHighLevel integration mode — single location, Private Integration
+
+Profitable Solutions runs inside the existing Zenoflo GoHighLevel location, authenticated with a **Private Integration token** (`GHL_API_KEY`, sent as a Bearer token with the `Version: 2021-07-28` header). We are not building a GHL marketplace app, and there is no OAuth flow.
+
+Why: teams are contacts and funnels *inside one location* (`organizations.ghl_contact_id`, `organizations.ghl_store_id`), not separate GHL sub-accounts. One location, one owner, one token. A marketplace app with OAuth solves a different problem — letting other businesses install your app into *their* GHL accounts. That is a distribution mechanism. Profitable Solutions is running its own back office against its own account, so marketplace would buy an app review, a token refresh cycle, and scope management in exchange for nothing we need.
+
+This is the pilot posture, chosen deliberately so the tool can be piloted now rather than waiting on an agency build-out.
+
+**What revisits this decision:** moving to a GHL sub-account per large team or connection. Private Integration tokens are per-location, so a sub-account model means one token per team — which does not scale in env config. That is the point where we build out the agency level, move to OAuth, store a token and location per organization, and migrate the existing data across.
+
+The API client is deliberately auth-agnostic: it sends whatever bearer token it is given (`src/integrations/ghl/client.ts`). An OAuth access token drops in unchanged, so the migration is about *obtaining and refreshing* tokens and storing them per org, not about rewriting call sites.
+
+Note: `GHL_LOCATION_ID` is declared in `src/config/env.ts` but not yet read anywhere. It is kept because GHL v2 endpoints we have not built yet (contact creation, search) require it, and `GHL-SETUP.md` already instructs the operator to fill it in.
+
 ## 2026-08-01: model and architecture confirmed
 
 The original docs assumed fixed-window pre-order fundraising. That was wrong. The confirmed model and the decisions that shape the build:
