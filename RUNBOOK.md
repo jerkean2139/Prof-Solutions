@@ -160,10 +160,20 @@ GHL creates a tag when it is applied, so that part is eyes-on (step 7).
 
 ## The read-only ops question box (Phase 3)
 
-`GET /agent/schema` works today and lists the tables. `POST /agent/query` reports
-that it is not configured until `ANTHROPIC_API_KEY` is set and the model planner
-is wired and verified. Every query it will ever run is read-only, three ways
-over: a SQL guard, a SELECT-only database role, and a read-only transaction.
+`GET /agent/schema` works today and lists the tables. `POST /agent/query` — and
+the **Ask** tab in the app — turn on as soon as `ANTHROPIC_API_KEY` is set; until
+then they say plainly that they are not configured. Every query it will ever run
+is read-only, three ways over: a SQL guard, a SELECT-only database role, and a
+read-only transaction.
+
+To turn it on: set `ANTHROPIC_API_KEY` and restart. Then open **Ask** and try one
+of the example questions. What you'll see: the answer as a table, with the SQL it
+ran behind "Show the SQL this ran".
+
+This is the one piece that has never been run against the live API, so treat the
+first few questions as the verification step: check the SQL under a couple of
+answers and confirm the numbers match what the Dashboard shows. If a question
+comes back wrong, the SQL will tell you why — send it over rather than guessing.
 
 ## Backups
 
