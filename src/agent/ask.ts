@@ -1,6 +1,7 @@
 import { schemaAsText } from './schema.js';
 import { runReadOnlyQuery, type QueryResult } from './executor.js';
-import { notConfiguredPlanner, type SqlPlanner } from './planner.js';
+import { type SqlPlanner } from './planner.js';
+import { resolvePlanner } from './modelPlanner.js';
 
 // Ties the read-only ops agent together: describe the schema, ask the planner
 // for one SELECT, then run it through the guard and the read-only executor.
@@ -18,7 +19,7 @@ export async function answerQuestion(
   question: string,
   opts?: { planner?: SqlPlanner; maxRows?: number; timeoutMs?: number },
 ): Promise<AgentAnswer> {
-  const planner = opts?.planner ?? notConfiguredPlanner;
+  const planner = opts?.planner ?? resolvePlanner();
   const schemaText = await schemaAsText();
   const plan = await planner(question, schemaText);
   const result = await runReadOnlyQuery(plan.sql, {

@@ -22,14 +22,12 @@ export class AgentNotConfiguredError extends Error {
   }
 }
 
-// The default planner is intentionally not wired to a model. Wiring it to the
-// Anthropic Messages API (build the prompt from schemaText, require a single
-// SELECT back) is the one remaining step, and it needs ANTHROPIC_API_KEY plus a
-// live verification pass before it can be trusted. Until then this reports the
-// truth rather than fabricating SQL.
+// Used when there is no key. It reports the truth rather than fabricating SQL.
 export const notConfiguredPlanner: SqlPlanner = async () => {
-  const detail = env.ANTHROPIC_API_KEY
-    ? 'ANTHROPIC_API_KEY is set but the model planner has not been wired and verified yet.'
-    : 'Set ANTHROPIC_API_KEY and wire the model planner to enable natural-language queries.';
-  throw new AgentNotConfiguredError(`Ops agent natural-language planner is not configured. ${detail}`);
+  throw new AgentNotConfiguredError(
+    'Ops agent natural-language planner is not configured. Set ANTHROPIC_API_KEY to enable natural-language queries.',
+  );
 };
+
+// `resolvePlanner` (which picks between this and the model planner) lives in
+// modelPlanner.ts, so this module stays a dependency-free seam.

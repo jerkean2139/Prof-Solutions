@@ -65,7 +65,99 @@ document.querySelectorAll('.tab').forEach((tab) => {
     if (tab.dataset.view === 'payouts') loadPayouts();
     if (tab.dataset.view === 'catalog') loadCatalog();
     if (tab.dataset.view === 'purchasing') loadPurchasing();
+    if (tab.dataset.view === 'ask') initAsk();
   });
+});
+
+// ---- ask (Phase 3 read-only ops agent) ----
+// Sends a question to /agent/query and renders the answer as a table, with the
+// SQL shown so nobody has to take a number on trust. The endpoint is read-only
+// three ways over on the server; nothing here can change that.
+
+const ASK_EXAMPLES = [
+  'How many units did we sell this month?',
+  'Which teams have an open sale right now?',
+  'What is on hand for each SKU?',
+  'Who are the top five sellers by revenue?',
+];
+
+function initAsk() {
+  const box = $('askExamples');
+  if (box.childElementCount) return; // already built
+  ASK_EXAMPLES.forEach((q) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn ghost sm';
+    b.textContent = q;
+    b.addEventListener('click', () => {
+      $('askQ').value = q;
+      runAsk();
+    });
+    box.appendChild(b);
+  });
+}
+
+function renderAskTable(rows, columns) {
+  if (!rows || !rows.length) return '<p class="muted">No rows matched.</p>';
+  // Prefer the server's column list so the order matches the query, not
+  // whatever order the first row's keys happen to enumerate in.
+  const cols = columns && columns.length ? columns : Object.keys(rows[0]);
+  const head = cols.map((c) => `<th>${esc(c)}</th>`).join('');
+  const body = rows
+    .map((r) => `<tr>${cols.map((c) => `<td>${esc(fmtCell(r[c]))}</td>`).join('')}</tr>`)
+    .join('');
+  return `<div class="scroll"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function fmtCell(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return v;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
+}
+
+async function runAsk() {
+  const question = $('askQ').value.trim();
+  if (!question) return;
+  const out = $('askOut');
+  const btn = $('askBtn');
+  btn.disabled = true;
+  out.innerHTML = '<div class="card"><p class="muted">Thinking…</p></div>';
+  try {
+    const res = await api('/agent/query', {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    });
+    const rows = (res.result && res.result.rows) || [];
+    const truncated = res.result && res.result.truncated;
+    out.innerHTML = `
+      <div class="card">
+        <h3>${esc(res.question)}</h3>
+        ${res.rationale ? `<p class="muted">${esc(res.rationale)}</p>` : ''}
+        ${renderAskTable(rows, res.result && res.result.columns)}
+        ${truncated ? '<p class="muted">Showing the first rows only — ask a narrower question for the rest.</p>' : ''}
+        <details style="margin-top:.6rem">
+          <summary class="muted">Show the SQL this ran</summary>
+          <pre class="scroll" style="white-space:pre-wrap">${esc(res.sql)}</pre>
+        </details>
+      </div>`;
+  } catch (e) {
+    // The not-configured case is the expected one until ANTHROPIC_API_KEY is
+    // set, so it reads as a setup step rather than a failure.
+    out.innerHTML = `<div class="card"><p>${esc(e.message)}</p></div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$('askBtn').addEventListener('click', runAsk);
+$('askQ').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') runAsk();
 });
 
 // ---- order entry ----

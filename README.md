@@ -152,12 +152,27 @@ layers so no one layer stands alone:
    database itself refuses any write even if the guard were bypassed.
 
 The piece that turns a question into SQL — the planner — is an injectable seam,
-exactly like the Clerk verifier. The whole pipeline (schema context, guard,
-read-only execution) is built and tested with an injected planner and no key.
-Wiring the default planner to a model needs `ANTHROPIC_API_KEY` plus a live
-verification pass; until then `POST /agent/query` reports that it is not
-configured rather than fabricating SQL. `GET /agent/schema` (metadata only,
-never data) works today.
+exactly like the Clerk verifier. It is wired to the Anthropic Messages API
+(`src/agent/modelPlanner.ts`) and turns on when `ANTHROPIC_API_KEY` is set;
+without a key, `POST /agent/query` reports that it is not configured rather than
+fabricating SQL. `GET /agent/schema` (metadata only, never data) works today.
+
+The planner asks for a structured `{sql, rationale}` response, so there is no
+prose to strip, and it is grounded in the rules that make an answer *correct* as
+well as safe — soft deletes excluded, money left as `NUMERIC`, the ledger
+treated as the authority for inventory history. It has no tools and never
+executes anything: the SQL it returns still goes through all three read-only
+layers, which is what the tests pin down (a planner that returns `DELETE` is
+rejected by the guard).
+
+**Not yet verified against the live API.** The request shape is typechecked
+against the SDK and the response handling is covered by tests with an injected
+client, but no call has been made with a real key. The first live run is the
+verification step.
+
+The seller and org portal exposes this as the **Ask** tab: a question box, the
+answer as a table, and the SQL it ran behind a disclosure so no number has to be
+taken on trust.
 
 ## GoHighLevel integration
 
