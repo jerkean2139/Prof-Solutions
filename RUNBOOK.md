@@ -86,9 +86,13 @@ malformed; the message names the exact one.
 
 ## Deploying to Railway
 
-Railway builds from the repo and runs the app. You set the same environment
-variables in the Railway project settings that you have in your local `.env`,
-plus the Postgres and Redis URLs Railway gives you.
+Setting it up for the first time is `DEPLOY-RAILWAY.md` — project, add-ons,
+variables, the start command that runs migrations, and the worker service.
+Do that before the GoHighLevel setup, which needs the public URL it produces.
+
+After that, Railway builds from the repo and runs the app. You set the same
+environment variables in the Railway project settings that you have in your
+local `.env`, plus the Postgres and Redis URLs Railway gives you.
 
 Run these once against the production database, from a shell that has the
 production `DATABASE_URL` set (do NOT run `seed` in production):

@@ -14,6 +14,7 @@ Start with the docs, in this order:
 - `SCHEMA.md` — the data model
 - `BUILD-PLAN.md` — phases and what "done" means for each
 - `RUNBOOK.md` — how to run, deploy, smoke-test, and turn on the key-gated pieces
+- `DEPLOY-RAILWAY.md` — first-time deploy: project, add-ons, variables, the worker service
 - `GHL-GO-LIVE.md` — the seven-step checklist for wiring GoHighLevel, verified by `npm run ghl:preflight`
 
 ## Stack
@@ -23,9 +24,10 @@ small in-repo runner (no ORM): the database has to outlive the application, so
 migrations are portable SQL. Clerk is the auth boundary, wired now and enforced
 later. Deploys target Railway.
 
-## Phase 0 (this repo today)
+## Phase 0: the foundation
 
-Foundation only, no end-user UI:
+The bones everything else is built on. Phases 1 through 3 are also in this
+repo — see `BUILD-PLAN.md` for what each one covers.
 
 - Reversible SQL migrations for the full schema, with the integrity rules in the
   database: append-only `inventory_transactions`, orders gated on an open sale,
