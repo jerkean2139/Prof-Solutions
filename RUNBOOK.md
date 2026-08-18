@@ -86,28 +86,60 @@ malformed; the message names the exact one.
 
 ## Deploying to Railway
 
-Setting it up for the first time is `DEPLOY-RAILWAY.md` — project, add-ons,
-variables, the start command that runs migrations, and the worker service.
-Do that before the GoHighLevel setup, which needs the public URL it produces.
+Never set one up before? `DEPLOY-RAILWAY.md` is the click-by-click version of
+this section. Do it before the GoHighLevel setup, which needs the public URL it
+produces.
 
-After that, Railway builds from the repo and runs the app. You set the same
-environment variables in the Railway project settings that you have in your
-local `.env`, plus the Postgres and Redis URLs Railway gives you.
+Two services run from this one repo, plus the Postgres and Redis add-ons:
 
-Run these once against the production database, from a shell that has the
-production `DATABASE_URL` set (do NOT run `seed` in production):
+| Service | Start command | Config file |
+|---|---|---|
+| web (the API and the PWA) | `npm start` | `railway.json` (the default) |
+| worker (the GHL sender) | `npm run start:worker` | `railway.worker.json` |
 
-```bash
-npm run migrate:up
-```
+Both build the same way (`npm run build`) and both need the same environment
+variables. For the worker service, set **Settings → Config-as-code → Railway
+Config File** to `railway.worker.json`; otherwise it picks up `railway.json`
+and you get two web servers and nothing draining the queue.
 
-Two processes run in production, both from this repo. Both run the compiled
-output, so the build runs first (Railway runs `npm run build` for you because
-this repo has a `build` script):
+### Environment variables
 
-- build once per deploy: `npm run build`
-- the web app: `npm start`
-- the background sender: `npm run start:worker`
+Set everything in `.env.example` on **both** services. Two of them come from
+Railway rather than from you:
+
+- `DATABASE_URL` — reference the Postgres add-on: `${{Postgres.DATABASE_URL}}`.
+- `REDIS_URL` — reference the Redis add-on: `${{Redis.REDIS_URL}}`.
+
+Use the variable reference, not a pasted string. A pasted URL goes stale the
+moment the add-on rotates its password, and the failure looks like an
+authentication error weeks after the deploy that caused it.
+
+`DATABASE_SSL` can stay `auto`. It reads `sslmode` out of the URL, which is
+correct for the private URL (plaintext, trusted network) and for the public
+proxy URL (TLS against a certificate Node's CA bundle does not carry).
+
+Leave `NODE_ENV=production`. Do not set `PORT` — Railway injects it, and a
+hardcoded value is how a healthy app ends up reported as having no open ports.
+
+### Migrations
+
+`railway.json` runs `npm run migrate:deploy` as the pre-deploy command, so the
+schema is applied before the new version takes traffic and a failed migration
+blocks the rollout instead of half-breaking a live one. It runs the compiled
+runner (`node dist/db/migrate.js up`), so it does not need `tsx` at runtime.
+Never run `seed` against production.
+
+### When a deploy fails, read the first error, not the loudest one
+
+| What the logs say | What it actually is |
+|---|---|
+| `getaddrinfo ENOTFOUND redis.railway.internal` | The private network is IPv6-only. The app now asks the resolver for any family; if you see this again, confirm both services are in the same project and environment, and that Redis is actually deployed. |
+| `getaddrinfo ENOTFOUND postgres.railway.internal` | Same, for Postgres. Usually a `DATABASE_URL` typed by hand instead of referenced. |
+| `self-signed certificate in certificate chain` | A public proxy URL without SSL configured. `DATABASE_SSL=auto` handles it; `DATABASE_SSL=require` forces it. |
+| `Invalid environment configuration: DATABASE_URL: ...` | A required variable is missing on that service. The app refuses to boot rather than run half-configured — check the worker service too, not just web. |
+| `relation "..." does not exist` | Migrations have not run. Check the pre-deploy step in the deploy logs. |
+| `no open ports detected` | The process exited before binding, or bound the wrong port. Scroll up: the real error is above it. |
+| A wall of identical stack traces | A dependency is down, not broken. One line per failure is what a healthy log looks like; the app logs the first error and stays quiet until the connection recovers. |
 
 The CI workflow has a deploy step that stays inert until `RAILWAY_TOKEN` is set
 as a GitHub secret. Add that token to let merges deploy.

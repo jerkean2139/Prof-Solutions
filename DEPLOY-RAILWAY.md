@@ -1,86 +1,96 @@
 # Deploying to Railway (first time)
 
-Getting the app onto the internet. Do this **before** the GoHighLevel setup in
-`GHL-GO-LIVE.md`: the GHL store posts orders to a public URL, so there is nothing
-to point it at until this is done.
+The click-by-click version of the Railway section in `RUNBOOK.md`, for someone
+who has not set up hosting before. Roughly 30 minutes.
 
-About 30 minutes. `RUNBOOK.md` covers running it day to day once this is done.
+Do this **before** `GHL-GO-LIVE.md`: the GoHighLevel store posts orders to a
+public URL, and there is nothing to point it at until this is done.
 
 ## What you end up with
 
-Four boxes in one Railway project:
+Four boxes in one Railway project.
 
-| Box | What it is |
-|---|---|
-| App | The web app and JSON API. This one gets a public domain. |
-| Worker | The background sender that talks to GoHighLevel. No domain. |
-| Postgres | The system of record. |
-| Redis | The outbound job queue and cache. |
+| Box | What it is | Public URL? |
+|---|---|---|
+| web | The app and the API | Yes |
+| worker | The background sender for GoHighLevel | No |
+| Postgres | The system of record | No |
+| Redis | The outbound job queue | No |
+
+**The build and start commands are already in the repo** — `railway.json` for
+web, `railway.worker.json` for the worker. You do not type start commands
+anywhere. The only thing you tell Railway about the worker is which of those two
+files it should read.
+
+> **Do not set a Custom Start Command in the Railway UI.** It overrides the
+> config file, which is where the pre-deploy migration step lives. A manual start
+> command silently skips migrations and the app boots against a database with no
+> tables.
 
 ## 1. Project and add-ons
 
 Sign in to Railway with GitHub, then **New Project → Deploy from GitHub repo →
 Prof-Solutions**. The first build fails; it has no database yet.
 
-Add both add-ons to the same project: **Create → Database → PostgreSQL**, then
-**Create → Database → Redis**.
+In the same project: **Create → Database → PostgreSQL**, then **Create →
+Database → Redis**.
 
-## 2. Variables on the app service
+## 2. Variables on the web service
+
+Everything in `.env.example` belongs here. The two that come from Railway rather
+than from you:
 
 ```
-DATABASE_URL   = ${{Postgres.DATABASE_URL}}
-REDIS_URL      = ${{Redis.REDIS_URL}}
-NODE_ENV       = production
-AUTH_ENFORCED  = false
+DATABASE_URL = ${{Postgres.DATABASE_URL}}
+REDIS_URL    = ${{Redis.REDIS_URL}}
 ```
 
-The `${{...}}` values are Railway references, not placeholders — paste them
-literally. **Do not set `PORT`**: Railway injects it and the server reads it
-(`src/http/server.ts` listens on `env.PORT`).
+Paste those literally — braces and all. They are references, not placeholders.
+A pasted connection string works until the add-on rotates its password, and then
+fails as an authentication error weeks after the deploy that caused it.
 
-`AUTH_ENFORCED=false` keeps Clerk enforcement off for the pilot (rule 9). The app
-refuses to start with enforcement on and no `CLERK_SECRET_KEY`, so flipping it
-later is a deliberate, two-variable change.
+Also set:
 
-## 3. Start command that migrates
-
-Set the app service's **Custom Start Command** to:
-
-```bash
-npm run migrate:up && npm start
+```
+NODE_ENV     = production
+DATABASE_SSL = auto
+AUTH_ENFORCED = false
 ```
 
-Migrations are tracked in `schema_migrations` and skip what is already applied,
-so this is safe on every restart and every redeploy. It also means the database
-is never modified by hand (rule 11).
+`DATABASE_SSL=auto` reads `sslmode` out of the URL, which is right for both the
+private URL and the public proxy URL. **Do not set `PORT`** — Railway injects it,
+and a hardcoded one is how a healthy app gets reported as having no open ports.
 
-Railway runs `npm run build` for you because the repo has a `build` script;
-`npm start` runs the compiled output from `dist/`.
+## 3. Deploy and check
 
-## 4. Domain and health check
+Redeploy and wait for green. Then **Settings → Networking → Generate Domain**.
 
-**Settings → Networking → Generate Domain.** Then check:
+- `GET /health` → `{"ok":true,"db":"up","authEnforced":false}`
+- `/app/` loads the app
 
-- `GET /health` returns `{"ok":true,"db":"up","authEnforced":false}`
-- `/app/` loads the PWA
-
-A `db` that is not `up` means `DATABASE_URL` is wrong — it must be the
-`${{Postgres.DATABASE_URL}}` reference, not a pasted connection string.
-
-Keep the domain: `GHL-GO-LIVE.md` step 7 points the store webhook at
+Keep the domain. `GHL-GO-LIVE.md` step 7 points the store webhook at
 `https://<domain>/webhooks/ghl`.
 
-## 5. The worker service
+Migrations already ran: `railway.json` runs `npm run migrate:deploy` as a
+pre-deploy command, so the schema is applied before the new version takes
+traffic, and a failed migration blocks the rollout instead of half-breaking a
+live one. Nobody touches the database by hand (rule 11).
+
+## 4. The worker service
 
 **Create → GitHub Repo →** the same repo, then:
 
-- the same four variables from step 2
-- **Custom Start Command:** `npm run start:worker`
-- no domain
+1. **Settings → Config-as-code → Railway Config File** → `railway.worker.json`
+2. Add the same variables from step 2
+3. No domain
+
+Step 1 is the one that matters. Without it the service reads `railway.json`,
+and you get two web servers and nothing draining the queue.
 
 Confirm from its logs: `ghl outbound worker started`. Without this service the
-app queues GHL jobs that nothing ever sends — and nothing errors, so it looks
-identical to working.
+app queues GoHighLevel jobs that nothing ever sends — and nothing errors, so it
+is indistinguishable from working until a team mentions they were never
+messaged.
 
 ## Never seed production
 
@@ -89,18 +99,17 @@ identical to working.
 
 ## Optional: deploy on merge
 
-The CI workflow already has a deploy job, inert until you add both of:
+The CI workflow already has a deploy job, inert until you add both:
 
 - `RAILWAY_TOKEN` — a repo **secret**
-- `RAILWAY_SERVICE` — a repo **variable**, set to the app service's name
+- `RAILWAY_SERVICE` — a repo **variable**, the web service's name
 
-With those set, a merge to `main` deploys after tests pass. Without them the job
-logs why it skipped and exits clean.
+With both set, a merge to `main` deploys after tests pass.
 
 ## Adding keys later
 
-Everything else is a variable on the app service (and, for the GHL ones, the
-worker too):
+Each is a variable on the web service — and, for the GoHighLevel ones, the
+worker too.
 
 | Variable | Turns on | Guide |
 |---|---|---|
@@ -108,3 +117,9 @@ worker too):
 | `ACCEPT_BLUE_WEBHOOK_SECRET` | Verified ACH payment webhooks | `GHL-SETUP.md` |
 | `ANTHROPIC_API_KEY` | The Ask tab | `README.md` |
 | `CLERK_SECRET_KEY` + `AUTH_ENFORCED=true` | Staff login | `RUNBOOK.md` |
+
+## When a deploy fails
+
+`RUNBOOK.md` has the log-message-to-cause table. The short version: read the
+**first** error, not the loudest one — a wall of identical stack traces is one
+dependency down, and the real cause is above it.

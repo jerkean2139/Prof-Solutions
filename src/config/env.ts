@@ -15,6 +15,13 @@ const schema = z.object({
     .default('info'),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  // How to talk TLS to Postgres. "auto" reads sslmode out of DATABASE_URL: a
+  // managed public/proxy URL asks for TLS (and presents a certificate Node's
+  // CA bundle does not know), a private network URL does not. Override with
+  // require or disable when the URL does not say. See src/db/pool.ts.
+  DATABASE_SSL: z
+    .enum(['auto', 'require', 'verify-full', 'disable'])
+    .default('auto'),
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
 
   // Auth. Enforcement is off until dev and test are done on mock data.
