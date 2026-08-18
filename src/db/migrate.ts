@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pool, closePool } from './pool.js';
 import { logger } from '../logger.js';
 
@@ -178,8 +178,11 @@ async function main(): Promise<void> {
   }
 }
 
-// Only run as a CLI, not when imported by tests.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Only run as a CLI, not when imported by tests. pathToFileURL rather than a
+// template string: a mismatch here is silent, and a migration command that
+// exits 0 without running anything is the worst possible deploy outcome.
+const entrypoint = process.argv[1];
+if (entrypoint && import.meta.url === pathToFileURL(entrypoint).href) {
   main()
     .then(() => closePool())
     .then(() => process.exit(0))
