@@ -1,11 +1,11 @@
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { env } from '../config/env.js';
 import { logger } from '../logger.js';
 import { requireAuth } from '../auth/clerk.js';
 import { verifyWebhookSignature } from '../integrations/acceptblue/payments.js';
-import { pool } from '../db/pool.js';
+import { pool, closePool } from '../db/pool.js';
 import { AppError } from './errors.js';
 import { productRoutes } from '../domain/products/routes.js';
 import { inventoryRoutes } from '../domain/inventory/routes.js';
@@ -138,10 +138,45 @@ export function createServer() {
   return app;
 }
 
-// Only listen when run directly, not when imported by a test.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Only listen when run directly, not when imported by a test. pathToFileURL
+// does the encoding a template string does not: a path with a space, or a
+// deploy directory that is a symlink, made the comparison quietly false and
+// the process exited 0 having never bound a port -- which the platform reports
+// as "no open ports detected", with nothing in the logs to explain it.
+const entrypoint = process.argv[1];
+if (entrypoint && import.meta.url === pathToFileURL(entrypoint).href) {
   const app = createServer();
-  app.listen(env.PORT, () => {
+  // Bind every interface. The default is fine on Node, but being explicit
+  // means a container that only routes to 0.0.0.0 cannot be missed.
+  const server = app.listen(env.PORT, '0.0.0.0', () => {
     logger.info({ port: env.PORT, authEnforced: env.AUTH_ENFORCED }, 'server listening');
   });
+
+  // The platform sends SIGTERM on redeploy and kills the container shortly
+  // after. Stop accepting connections, let in-flight requests finish, then
+  // release the database pool so no order dies mid-write.
+  let shuttingDown = false;
+  const shutdown = (signal: string): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ signal }, 'shutting down http server');
+    const finish = (): void => {
+      void closePool()
+        .catch((err: Error) => logger.error({ err: err.message }, 'pool close failed'))
+        .then(() => process.exit(0));
+    };
+    // Backstop: a stuck request must not hold the container open until the
+    // platform SIGKILLs it.
+    setTimeout(() => {
+      logger.warn('shutdown timed out, exiting anyway');
+      process.exit(0);
+    }, 10_000);
+    server.close(finish);
+    // Keep-alive sockets sitting idle are not in-flight work. Without this the
+    // shutdown always waits out the full timeout instead of ending in
+    // milliseconds, and every redeploy pauses for ten seconds.
+    server.closeIdleConnections();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }

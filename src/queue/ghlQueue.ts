@@ -51,7 +51,7 @@ let deadLetterQueue: Queue<GhlJobData, unknown, GhlJobName> | undefined;
 export function getGhlQueue(): Queue<GhlJobData, unknown, GhlJobName> {
   if (!queue) {
     queue = new Queue(GHL_QUEUE_NAME, {
-      connection: createRedisConnection(),
+      connection: createRedisConnection('ghl-queue'),
       defaultJobOptions,
     });
   }
@@ -61,7 +61,7 @@ export function getGhlQueue(): Queue<GhlJobData, unknown, GhlJobName> {
 export function getDeadLetterQueue(): Queue<GhlJobData, unknown, GhlJobName> {
   if (!deadLetterQueue) {
     deadLetterQueue = new Queue(GHL_DEAD_LETTER_QUEUE_NAME, {
-      connection: createRedisConnection(),
+      connection: createRedisConnection('ghl-dead-letter'),
     });
   }
   return deadLetterQueue;
@@ -94,7 +94,7 @@ export function startGhlWorker(
       await processor(job);
     },
     {
-      connection: createRedisConnection(),
+      connection: createRedisConnection('ghl-worker'),
       // Batch under GHL's rate limits: at most MAX jobs per DURATION window.
       // A bulk sale finalize cannot fire hundreds of calls in a burst.
       limiter: { max: env.GHL_RATE_LIMIT_MAX, duration: env.GHL_RATE_LIMIT_DURATION_MS },
