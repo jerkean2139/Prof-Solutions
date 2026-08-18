@@ -86,6 +86,10 @@ malformed; the message names the exact one.
 
 ## Deploying to Railway
 
+Never set one up before? `DEPLOY-RAILWAY.md` is the click-by-click version of
+this section. Do it before the GoHighLevel setup, which needs the public URL it
+produces.
+
 Two services run from this one repo, plus the Postgres and Redis add-ons:
 
 | Service | Start command | Config file |
