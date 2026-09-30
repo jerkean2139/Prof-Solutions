@@ -7,6 +7,20 @@ const bool = z
   .enum(['true', 'false'])
   .transform((v) => v === 'true');
 
+// A connection URL Railway supplies through a reference variable. Missing and
+// empty are different failures with different fixes, so they get different
+// messages: an empty value almost always means the reference resolved to
+// nothing, because the service it names does not exist under that name. This is
+// read in the pre-deploy migration step, before anything else has logged.
+const railwayUrl = (name: string, ref: string) =>
+  z
+    .string({ required_error: `${name} is not set (on Railway: ${name}=${ref})` })
+    .min(
+      1,
+      `${name} is set but empty. On Railway that means ${ref} resolved to nothing: ` +
+        `check the add-on exists in this environment and its service name matches.`,
+    );
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -14,7 +28,7 @@ const schema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
 
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  DATABASE_URL: railwayUrl('DATABASE_URL', '${{Postgres.DATABASE_URL}}'),
   // How to talk TLS to Postgres. "auto" reads sslmode out of DATABASE_URL: a
   // managed public/proxy URL asks for TLS (and presents a certificate Node's
   // CA bundle does not know), a private network URL does not. Override with
@@ -22,7 +36,7 @@ const schema = z.object({
   DATABASE_SSL: z
     .enum(['auto', 'require', 'verify-full', 'disable'])
     .default('auto'),
-  REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
+  REDIS_URL: railwayUrl('REDIS_URL', '${{Redis.REDIS_URL}}'),
 
   // Auth. Enforcement is off until dev and test are done on mock data.
   AUTH_ENFORCED: bool.default('false'),

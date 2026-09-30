@@ -136,7 +136,9 @@ Never run `seed` against production.
 | `getaddrinfo ENOTFOUND redis.railway.internal` | The private network is IPv6-only. The app now asks the resolver for any family; if you see this again, confirm both services are in the same project and environment, and that Redis is actually deployed. |
 | `getaddrinfo ENOTFOUND postgres.railway.internal` | Same, for Postgres. Usually a `DATABASE_URL` typed by hand instead of referenced. |
 | `self-signed certificate in certificate chain` | A public proxy URL without SSL configured. `DATABASE_SSL=auto` handles it; `DATABASE_SSL=require` forces it. |
-| `Invalid environment configuration: DATABASE_URL: ...` | A required variable is missing on that service. The app refuses to boot rather than run half-configured — check the worker service too, not just web. |
+| `REDIS_URL is not set` (or `DATABASE_URL`) | A required variable is missing on that service. It shows up first in the pre-deploy `migrate:deploy` step, because the migration runner loads the same config as the app. The app refuses to boot rather than run half-configured — check the worker service too, not just web. |
+| `REDIS_URL is set but empty` (or `DATABASE_URL`) | The variable exists but its `${{...}}` reference resolved to nothing. The add-on is missing from this environment, or its service name is not the one in the reference (`Redis`, `Postgres`). Rename the add-on or fix the reference. |
+| `setup │ nodejs_24` in the build table | Nixpacks reads `engines` in `package.json` before `.nvmrc`, and takes the newest version the range allows. `engines` is capped below 23 so it lands on 22, the version CI tests. If this line ever says something other than `nodejs_22`, check `engines` first. |
 | `relation "..." does not exist` | Migrations have not run. Check the pre-deploy step in the deploy logs. |
 | `no open ports detected` | The process exited before binding, or bound the wrong port. Scroll up: the real error is above it. |
 | A wall of identical stack traces | A dependency is down, not broken. One line per failure is what a healthy log looks like; the app logs the first error and stays quiet until the connection recovers. |
