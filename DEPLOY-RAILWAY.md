@@ -49,6 +49,16 @@ Paste those literally — braces and all. They are references, not placeholders.
 A pasted connection string works until the add-on rotates its password, and then
 fails as an authentication error weeks after the deploy that caused it.
 
+The word before the dot is the add-on's **service name**, exactly as it shows on
+its box in the project canvas. If your Redis box is called `redis` or
+`Redis-abc1`, the reference resolves to an empty string and the deploy fails
+with `REDIS_URL is set but empty`. The variable editor autocompletes references
+when you type `${{` — pick from that list rather than typing the name.
+
+What you'll see when it is right: the deploy log's pre-deploy step prints
+`applied migration` once per table set (or `no pending migrations` on later
+deploys) instead of `Invalid environment configuration`.
+
 Also set:
 
 ```
